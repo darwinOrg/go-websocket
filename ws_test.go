@@ -23,6 +23,7 @@ type Message struct {
 }
 
 func TestSendMessage(t *testing.T) {
+	dgws.InitWsConnLimit(10)
 	monitor.Start("test", 19002)
 	engine := wrapper.DefaultEngine()
 	dgws.Get(&wrapper.RequestHolder[Message, error]{
