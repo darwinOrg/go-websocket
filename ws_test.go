@@ -81,7 +81,7 @@ func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []Test
 		time.Sleep(time.Second * intervalSeconds)
 	}
 
-	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "end"))
 	if err != nil {
 		dglogger.Errorf(ctx, "client write close error: %v", err)
 		return
