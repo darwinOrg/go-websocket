@@ -16,19 +16,33 @@ import (
 	"time"
 )
 
-const path = "/echo"
-
-type Message struct {
+type TestMessage struct {
 	Content string `json:"content" binding:"required,minLength=3"`
 }
 
-func TestSendMessage(t *testing.T) {
+var messages = []TestMessage{
+	{
+		Content: "123",
+	},
+	{
+		Content: "456",
+	},
+	{
+		Content: "789",
+	},
+	{
+		Content: "101",
+	},
+}
+
+func TestSendOwn(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	monitor.Start("test", 19002)
+	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.Get(&wrapper.RequestHolder[Message, error]{
+	dgws.Get(&wrapper.RequestHolder[TestMessage, error]{
 		RouterGroup: engine.Group(path),
-		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, message *Message) error {
+		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, message *TestMessage) error {
 			dglogger.Infof(ctx, "handle message: %s", message.Content)
 			return nil
 		},
@@ -37,23 +51,17 @@ func TestSendMessage(t *testing.T) {
 	time.Sleep(time.Second * 3)
 
 	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:8080", path, []Message{
-		{
-			Content: "123",
-		},
-		{
-			Content: "456",
-		},
-		{
-			Content: "789",
-		},
-		{
-			Content: "101",
-		},
-	}, 5)
+	sendMessage(ctx, "localhost:8080", path, messages, 5)
 }
 
-func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []Message, intervalSeconds time.Duration) {
+func TestSendLocal(t *testing.T) {
+	dgws.InitWsConnLimit(10)
+	path := "/public/v1/ws/test"
+	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
+	sendMessage(ctx, "localhost:9090", path, messages, 5)
+}
+
+func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []TestMessage, intervalSeconds time.Duration) {
 	u := url.URL{Scheme: "ws", Host: host, Path: path}
 	dglogger.Infof(ctx, "client connecting to %s", u.String())
 

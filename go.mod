@@ -9,7 +9,7 @@ require (
 	github.com/darwinOrg/go-validator-ext v0.0.3
 	github.com/darwinOrg/go-web v0.0.17
 	github.com/gin-gonic/gin v1.9.1
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.4.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/rolandhe/saber v0.0.4
 )
