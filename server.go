@@ -61,12 +61,16 @@ func bizHandler[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
 		}(cn)
 
 		for {
-			_, message, err := cn.ReadMessage()
+			mt, message, err := cn.ReadMessage()
 			if err != nil {
 				dglogger.Errorf(ctx, "server read error: %v", err)
 				break
 			}
 			dglogger.Infof(ctx, "server receive msg: %s", message)
+
+			if mt == websocket.CloseMessage {
+				break
+			}
 
 			req := new(T)
 			err = json.Unmarshal(message, req)
