@@ -66,12 +66,28 @@ func bizHandler[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
 				dglogger.Errorf(ctx, "server read error: %v", err)
 				break
 			}
-			dglogger.Infof(ctx, "server receive msg: %s", message)
+
+			if mt == websocket.PingMessage {
+				dglogger.Info(ctx, "server receive ping message")
+				cn.WriteMessage(websocket.PongMessage, []byte("ok"))
+				continue
+			}
+
+			if mt == websocket.PongMessage {
+				continue
+			}
+
+			if mt == websocket.BinaryMessage {
+				dglogger.Errorf(ctx, "server not support binary message")
+				continue
+			}
 
 			if mt == websocket.CloseMessage {
+				dglogger.Info(ctx, "server receive close message")
 				break
 			}
 
+			dglogger.Infof(ctx, "server receive msg: %s", message)
 			req := new(T)
 			err = json.Unmarshal(message, req)
 			if err != nil {
