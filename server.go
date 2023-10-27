@@ -63,7 +63,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
 		for {
 			mt, message, err := cn.ReadMessage()
 			if mt == websocket.CloseMessage || mt == -1 {
-				dglogger.Info(ctx, "server receive close message, error: %v", err)
+				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				break
 			}
 

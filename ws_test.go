@@ -61,6 +61,13 @@ func TestSendLocal(t *testing.T) {
 	sendMessage(ctx, "localhost:9090", path, messages, 5)
 }
 
+func TestSendProd(t *testing.T) {
+	dgws.InitWsConnLimit(10)
+	path := "/ground/public/v1/ws/test"
+	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
+	sendMessage(ctx, "e.globalpand.cn", path, messages, 5)
+}
+
 func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []TestMessage, intervalSeconds time.Duration) {
 	u := url.URL{Scheme: "ws", Host: host, Path: path}
 	dglogger.Infof(ctx, "client connecting to %s", u.String())
