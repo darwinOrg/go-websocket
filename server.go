@@ -2,6 +2,7 @@ package dgws
 
 import (
 	"encoding/json"
+	dgctx "github.com/darwinOrg/go-common/context"
 	dglogger "github.com/darwinOrg/go-logger"
 	ve "github.com/darwinOrg/go-validator-ext"
 	"github.com/darwinOrg/go-web/utils"
@@ -29,15 +30,50 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func Get[T any](rh *wrapper.RequestHolder[T, error]) {
-	rh.GET(rh.RelativePath, bizHandler(rh))
+func GetJson[T any](rh *wrapper.RequestHolder[T, error]) {
+	rh.GET(rh.RelativePath, bizHandlerJson(rh))
 }
 
-func Post[T any](rh *wrapper.RequestHolder[T, error]) {
-	rh.POST(rh.RelativePath, bizHandler(rh))
+func PostJson[T any](rh *wrapper.RequestHolder[T, error]) {
+	rh.POST(rh.RelativePath, bizHandlerJson(rh))
 }
 
-func bizHandler[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
+func GetBytes(rh *wrapper.RequestHolder[[]byte, error]) {
+	rh.GET(rh.RelativePath, bizHandlerBytes(rh))
+}
+
+func PostBytes(rh *wrapper.RequestHolder[[]byte, error]) {
+	rh.POST(rh.RelativePath, bizHandlerBytes(rh))
+}
+
+func bizHandlerJson[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
+	return bizHandler(rh, func(ctx *dgctx.DgContext, message []byte) (*T, error) {
+		dglogger.Infof(ctx, "server receive msg: %s", message)
+		req := new(T)
+		err := json.Unmarshal(message, req)
+		if err != nil {
+			dglogger.Errorf(ctx, "bind message to struct error: %v", err)
+			return nil, err
+		}
+
+		err = ve.ValidateDefault(req)
+		if err != nil {
+			dglogger.Errorf(ctx, "validate request object error: %v", err)
+			return nil, err
+		}
+
+		return req, nil
+	})
+}
+
+func bizHandlerBytes(rh *wrapper.RequestHolder[[]byte, error]) gin.HandlerFunc {
+	return bizHandler(rh, func(ctx *dgctx.DgContext, message []byte) (*[]byte, error) {
+		dglogger.Infof(ctx, "server receive msg size: %d", len(message))
+		return &message, nil
+	})
+}
+
+func bizHandler[T any](rh *wrapper.RequestHolder[T, error], convertFunc func(*dgctx.DgContext, []byte) (*T, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -87,21 +123,12 @@ func bizHandler[T any](rh *wrapper.RequestHolder[T, error]) gin.HandlerFunc {
 				break
 			}
 
-			dglogger.Infof(ctx, "server receive msg: %s", message)
-			req := new(T)
-			err = json.Unmarshal(message, req)
+			crt, err := convertFunc(ctx, message)
 			if err != nil {
-				dglogger.Errorf(ctx, "bind message to struct error: %v", err)
 				break
 			}
 
-			if err := c.ShouldBind(req); err != nil {
-				errMsg := ve.TranslateValidateError(err, ctx.Lang)
-				dglogger.Errorf(ctx, "bind request object error: %s", errMsg)
-				break
-			}
-
-			err = rh.BizHandler(c, ctx, req)
+			err = rh.BizHandler(c, ctx, crt)
 			if err != nil {
 				dglogger.Errorf(ctx, "biz handle message[%s] error: %v", message, err)
 			}
