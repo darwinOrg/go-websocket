@@ -40,7 +40,7 @@ func TestSendOwn(t *testing.T) {
 	monitor.Start("test", 19002)
 	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.Get(&wrapper.RequestHolder[TestMessage, error]{
+	dgws.GetJson(&wrapper.RequestHolder[TestMessage, error]{
 		RouterGroup: engine.Group(path),
 		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, message *TestMessage) error {
 			dglogger.Infof(ctx, "handle message: %s", message.Content)
