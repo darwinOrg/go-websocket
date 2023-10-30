@@ -21,7 +21,7 @@ type WebSocketMessage[T any] struct {
 type EndFunc func(mt int, data []byte) bool
 type convertMessageFunc[T any] func(*dgctx.DgContext, int, []byte) (*WebSocketMessage[T], error)
 
-func defaultEndFunc(mt int, _ []byte) bool {
+func DefaultEndFunc(mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
 }
 
@@ -111,7 +111,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], en
 		for {
 			mt, message, err := cn.ReadMessage()
 			if endFunc == nil {
-				endFunc = defaultEndFunc
+				endFunc = DefaultEndFunc
 			}
 			if endFunc(mt, message) {
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
