@@ -16,11 +16,11 @@ import (
 	"time"
 )
 
-type TestMessage struct {
+type TestData struct {
 	Content string `json:"content" binding:"required,minLength=3"`
 }
 
-var messages = []TestMessage{
+var datas = []TestData{
 	{
 		Content: "123",
 	},
@@ -40,10 +40,10 @@ func TestSendOwn(t *testing.T) {
 	monitor.Start("test", 19002)
 	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.GetJson(&wrapper.RequestHolder[TestMessage, error]{
+	dgws.GetJson(&wrapper.RequestHolder[dgws.WebSocketMessage[TestData], error]{
 		RouterGroup: engine.Group(path),
-		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, message *TestMessage) error {
-			dglogger.Infof(ctx, "handle message: %s", message.Content)
+		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage[TestData]) error {
+			dglogger.Infof(ctx, "handle message: %s", wsm.MessageData.Content)
 			return nil
 		},
 	})
@@ -51,24 +51,24 @@ func TestSendOwn(t *testing.T) {
 	time.Sleep(time.Second * 3)
 
 	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:8080", path, messages, 5)
+	sendMessage(ctx, "localhost:8080", path, datas, 5)
 }
 
 func TestSendLocal(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	path := "/public/v1/ws/test"
 	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:9090", path, messages, 5)
+	sendMessage(ctx, "localhost:9090", path, datas, 5)
 }
 
 func TestSendProd(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	path := "/ground/public/v1/ws/test"
 	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "e.globalpand.cn", path, messages, 5)
+	sendMessage(ctx, "e.globalpand.cn", path, datas, 5)
 }
 
-func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []TestMessage, intervalSeconds time.Duration) {
+func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []TestData, intervalSeconds time.Duration) {
 	u := url.URL{Scheme: "ws", Host: host, Path: path}
 	dglogger.Infof(ctx, "client connecting to %s", u.String())
 
@@ -78,8 +78,8 @@ func sendMessage(ctx *dgctx.DgContext, host string, path string, messages []Test
 	}
 	defer c.Close()
 
-	for _, message := range messages {
-		body, _ := json.Marshal(message)
+	for _, data := range datas {
+		body, _ := json.Marshal(data)
 		err := c.WriteMessage(websocket.TextMessage, body)
 		if err != nil {
 			dglogger.Errorf(ctx, "client write error: %v", err)
