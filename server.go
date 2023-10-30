@@ -18,6 +18,13 @@ type WebSocketMessage[T any] struct {
 	MessageData *T
 }
 
+type EndFunc func(mt int, data []byte) bool
+type convertMessageFunc[T any] func(*dgctx.DgContext, int, []byte) (*WebSocketMessage[T], error)
+
+func defaultEndFunc(mt int, _ []byte) bool {
+	return mt == websocket.CloseMessage || mt == -1
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// 根据鉴权的方式来处理, 如果不想鉴权的就直接返回true, 如果需要鉴权就要根据判断来返回true，或者false
@@ -35,24 +42,24 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]) {
-	rh.GET(rh.RelativePath, bizHandlerJson(rh))
+func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) {
+	rh.GET(rh.RelativePath, bizHandlerJson(rh, endFunc))
 }
 
-func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]) {
-	rh.POST(rh.RelativePath, bizHandlerJson(rh))
+func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) {
+	rh.POST(rh.RelativePath, bizHandlerJson(rh, endFunc))
 }
 
-func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error]) {
-	rh.GET(rh.RelativePath, bizHandlerBytes(rh))
+func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) {
+	rh.GET(rh.RelativePath, bizHandlerBytes(rh, endFunc))
 }
 
-func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error]) {
-	rh.POST(rh.RelativePath, bizHandlerBytes(rh))
+func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) {
+	rh.POST(rh.RelativePath, bizHandlerBytes(rh, endFunc))
 }
 
-func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]) gin.HandlerFunc {
-	return bizHandler(rh, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[T], error) {
+func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) gin.HandlerFunc {
+	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
 		req := new(T)
 		err := json.Unmarshal(data, req)
@@ -71,14 +78,14 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 	})
 }
 
-func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error]) gin.HandlerFunc {
-	return bizHandler(rh, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) gin.HandlerFunc {
+	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
 		dglogger.Infof(ctx, "server receive msg size: %d", len(data))
 		return &WebSocketMessage[[]byte]{MessageType: mt, MessageData: &data}, nil
 	})
 }
 
-func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], convertFunc func(*dgctx.DgContext, int, []byte) (*WebSocketMessage[T], error)) gin.HandlerFunc {
+func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc, convertFunc convertMessageFunc[T]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -103,7 +110,10 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], co
 
 		for {
 			mt, message, err := cn.ReadMessage()
-			if mt == websocket.CloseMessage || mt == -1 {
+			if endFunc == nil {
+				endFunc = defaultEndFunc
+			}
+			if endFunc(mt, message) {
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				break
 			}
@@ -115,11 +125,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], co
 			}
 
 			if mt == websocket.PongMessage {
-				continue
-			}
-
-			if mt == websocket.BinaryMessage {
-				dglogger.Errorf(ctx, "server not support binary message")
 				continue
 			}
 
