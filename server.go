@@ -115,6 +115,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], en
 			}
 			if endFunc(mt, message) {
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
+				cn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "end"))
 				break
 			}
 
