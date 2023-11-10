@@ -14,12 +14,13 @@ import (
 )
 
 type WebSocketMessage[T any] struct {
+	Connection  *websocket.Conn
 	MessageType int
 	MessageData *T
 }
 
 type EndFunc func(mt int, data []byte) bool
-type convertMessageFunc[T any] func(*dgctx.DgContext, int, []byte) (*WebSocketMessage[T], error)
+type convertMessageFunc[T any] func(*dgctx.DgContext, *websocket.Conn, int, []byte) (*WebSocketMessage[T], error)
 
 func DefaultEndFunc(mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
@@ -59,7 +60,7 @@ func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFu
 }
 
 func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) gin.HandlerFunc {
-	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[T], error) {
+	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
 		req := new(T)
 		err := json.Unmarshal(data, req)
@@ -74,14 +75,14 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 			return nil, err
 		}
 
-		return &WebSocketMessage[T]{MessageType: mt, MessageData: req}, nil
+		return &WebSocketMessage[T]{Connection: conn, MessageType: mt, MessageData: req}, nil
 	})
 }
 
 func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) gin.HandlerFunc {
-	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
 		dglogger.Infof(ctx, "server receive msg size: %d", len(data))
-		return &WebSocketMessage[[]byte]{MessageType: mt, MessageData: &data}, nil
+		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}, nil
 	})
 }
 
@@ -134,7 +135,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], en
 				break
 			}
 
-			crt, err := convertFunc(ctx, mt, message)
+			crt, err := convertFunc(ctx, cn, mt, message)
 			if err != nil {
 				break
 			}
