@@ -46,9 +46,7 @@ func TestSendOwn(t *testing.T) {
 			dglogger.Infof(ctx, "handle message: %s", wsm.MessageData.Content)
 			return nil
 		},
-	}, func(mt int, data []byte) bool {
-		return mt == websocket.CloseMessage || mt == -1
-	})
+	}, dgws.DefaultEndFunc)
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
 
