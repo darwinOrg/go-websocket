@@ -21,8 +21,13 @@ type WebSocketMessage[T any] struct {
 	MessageData *T
 }
 
+type StartFunc func(*dgctx.DgContext, *websocket.Conn) error
 type EndFunc func(mt int, data []byte) bool
 type convertMessageFunc[T any] func(*dgctx.DgContext, *websocket.Conn, int, []byte) (*WebSocketMessage[T], error)
+
+func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
+	return nil
+}
 
 func DefaultEndFunc(mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
@@ -45,24 +50,24 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) {
-	rh.GET(rh.RelativePath, bizHandlerJson(rh, endFunc))
+func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, endFunc EndFunc) {
+	rh.GET(rh.RelativePath, bizHandlerJson(rh, startFunc, endFunc))
 }
 
-func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) {
-	rh.POST(rh.RelativePath, bizHandlerJson(rh, endFunc))
+func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, endFunc EndFunc) {
+	rh.POST(rh.RelativePath, bizHandlerJson(rh, startFunc, endFunc))
 }
 
-func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) {
-	rh.GET(rh.RelativePath, bizHandlerBytes(rh, endFunc))
+func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, endFunc EndFunc) {
+	rh.GET(rh.RelativePath, bizHandlerBytes(rh, startFunc, endFunc))
 }
 
-func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) {
-	rh.POST(rh.RelativePath, bizHandlerBytes(rh, endFunc))
+func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, endFunc EndFunc) {
+	rh.POST(rh.RelativePath, bizHandlerBytes(rh, startFunc, endFunc))
 }
 
-func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc) gin.HandlerFunc {
-	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
+func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, endFunc EndFunc) gin.HandlerFunc {
+	return bizHandler(rh, startFunc, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
 		req := new(T)
 		err := json.Unmarshal(data, req)
@@ -81,14 +86,14 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 	})
 }
 
-func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], endFunc EndFunc) gin.HandlerFunc {
-	return bizHandler(rh, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, endFunc EndFunc) gin.HandlerFunc {
+	return bizHandler(rh, startFunc, endFunc, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
 		dglogger.Infof(ctx, "server receive msg size: %d", len(data))
 		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}, nil
 	})
 }
 
-func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], endFunc EndFunc, convertFunc convertMessageFunc[T]) gin.HandlerFunc {
+func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, endFunc EndFunc, convertFunc convertMessageFunc[T]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -97,20 +102,27 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], en
 			}
 			defer semaphore.Release()
 		}
+		ctx := utils.GetDgContext(c)
 
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
 		cn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			panic(err)
+			dglogger.Errorf(ctx, "upgrade error: %v", err)
+			return
 		}
 
-		ctx := utils.GetDgContext(c)
 		defer func(wc *websocket.Conn) {
 			err := wc.Close()
 			if err != nil {
 				dglogger.Errorf(ctx, "close websocket conn error: %v", err)
 			}
 		}(cn)
+
+		err = startFunc(ctx, cn)
+		if err != nil {
+			dglogger.Errorf(ctx, "start websocket error: %v", err)
+			return
+		}
 
 		for {
 			mt, message, err := cn.ReadMessage()
