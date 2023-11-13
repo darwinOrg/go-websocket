@@ -23,14 +23,14 @@ type WebSocketMessage[T any] struct {
 }
 
 type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *websocket.Conn, err error)
-type IsEndFunc func(forwardConn *websocket.Conn, mt int, data []byte) bool
+type IsEndFunc func(ctx *dgctx.DgContext, forwardConn *websocket.Conn, mt int, data []byte) bool
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 
 func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
 	return nil
 }
 
-func DefaultIsEndFunc(_ *websocket.Conn, mt int, _ []byte) bool {
+func DefaultIsEndFunc(_ *dgctx.DgContext, _ *websocket.Conn, mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
 }
 
@@ -138,7 +138,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 			if isEndFunc == nil {
 				isEndFunc = DefaultIsEndFunc
 			}
-			if isEndFunc(forwardConn, mt, message) {
+			if isEndFunc(ctx, forwardConn, mt, message) {
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				break
 			}
