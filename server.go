@@ -29,7 +29,7 @@ func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
 	return nil
 }
 
-func DefaultEndFunc(mt int, _ []byte) bool {
+func DefaultIsEndFunc(mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
 }
 
@@ -127,7 +127,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 		for {
 			mt, message, err := cn.ReadMessage()
 			if isEndFunc == nil {
-				isEndFunc = DefaultEndFunc
+				isEndFunc = DefaultIsEndFunc
 			}
 			if isEndFunc(mt, message) {
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
