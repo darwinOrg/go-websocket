@@ -3,6 +3,8 @@ package dgws
 import (
 	"encoding/json"
 	dgctx "github.com/darwinOrg/go-common/context"
+	dgerr "github.com/darwinOrg/go-common/enums/error"
+	"github.com/darwinOrg/go-common/result"
 	dglogger "github.com/darwinOrg/go-logger"
 	ve "github.com/darwinOrg/go-validator-ext"
 	"github.com/darwinOrg/go-web/utils"
@@ -90,7 +92,8 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], en
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
-				panic("request too fast")
+				c.AbortWithStatusJSON(http.StatusOK, result.FailByDgError[dgerr.DgError](dgerr.SYSTEM_BUSY))
+				return
 			}
 			defer semaphore.Release()
 		}
