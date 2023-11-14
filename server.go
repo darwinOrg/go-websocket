@@ -24,7 +24,7 @@ type WebSocketMessage[T any] struct {
 
 type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *websocket.Conn, err error)
 type IsEndFunc func(mt int, data []byte) bool
-type ForwardCallbackFunc func(ctx *dgctx.DgContext, forwardConn *websocket.Conn) error
+type ForwardCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 
 const WebsocketEndedKey = "WebsocketEnded"
@@ -150,7 +150,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 			}(forwardConn)
 
 			if startCallback != nil {
-				err := startCallback(ctx, forwardConn)
+				err := startCallback(ctx, conn, forwardConn)
 				if err != nil {
 					dglogger.Errorf(ctx, "start callback error: %v", err)
 				}
@@ -170,7 +170,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 				ctx.SetExtraKeyValue(WebsocketEndedKey, true)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				if endCallback != nil && forwardConn != nil {
-					err := endCallback(ctx, forwardConn)
+					err := endCallback(ctx, conn, forwardConn)
 					if err != nil {
 						dglogger.Errorf(ctx, "end callback error: %v", err)
 					}
