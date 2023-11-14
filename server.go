@@ -27,7 +27,7 @@ type IsEndFunc func(mt int, data []byte) bool
 type ForwardCallbackFunc func(ctx *dgctx.DgContext, forwardConn *websocket.Conn) error
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 
-const endedKey = "WS_ENDED"
+const endedKey = "WEBSOCKET_ENDED"
 
 func IsWsEnded(ctx *dgctx.DgContext) bool {
 	ended := ctx.GetExtraValue(endedKey)
@@ -154,6 +154,10 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 		}
 
 		for {
+			if IsWsEnded(ctx) {
+				break
+			}
+
 			mt, message, err := conn.ReadMessage()
 			if isEndFunc == nil {
 				isEndFunc = DefaultIsEndFunc
