@@ -106,7 +106,7 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 
 func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) gin.HandlerFunc {
 	return bizHandler(rh, startFunc, startCallback, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
-		dglogger.Infof(ctx, "server receive msg size: %d", len(data))
+		dglogger.Debugf(ctx, "server receive msg size: %d", len(data))
 		return &WebSocketMessage[[]byte]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: &data}, nil
 	})
 }
