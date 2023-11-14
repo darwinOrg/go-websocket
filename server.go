@@ -27,6 +27,18 @@ type IsEndFunc func(mt int, data []byte) bool
 type ForwardCallbackFunc func(ctx *dgctx.DgContext, forwardConn *websocket.Conn) error
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 
+const endedKey = "WS_ENDED"
+
+func IsWsEnded(ctx *dgctx.DgContext) bool {
+	ended := ctx.GetExtraValue(endedKey)
+	if ended == nil {
+		return false
+	}
+
+	e, ok := ended.(bool)
+	return ok && e
+}
+
 func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
 	return nil
 }
@@ -147,6 +159,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 				isEndFunc = DefaultIsEndFunc
 			}
 			if isEndFunc(mt, message) {
+				ctx.SetExtraKeyValue(endedKey, true)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				if endCallback != nil && forwardConn != nil {
 					err := endCallback(ctx, forwardConn)
