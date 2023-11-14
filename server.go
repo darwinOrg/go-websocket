@@ -22,7 +22,7 @@ type WebSocketMessage[T any] struct {
 	MessageData *T
 }
 
-type InitFunc func(c *gin.Context, ctx *dgctx.DgContext)
+type InitFunc func(c *gin.Context, ctx *dgctx.DgContext) error
 type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *websocket.Conn, err error)
 type IsEndFunc func(mt int, data []byte) bool
 type ForwardCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
@@ -124,7 +124,11 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 
 		ctx := utils.GetDgContext(c)
 		if initFunc != nil {
-			initFunc(c, ctx)
+			err := initFunc(c, ctx)
+			if err != nil {
+				dglogger.Errorf(ctx, "init error: %v", err)
+				return
+			}
 		}
 
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
