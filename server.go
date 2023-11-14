@@ -132,11 +132,12 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 					dglogger.Errorf(ctx, "close forward websocket conn error: %v", err)
 				}
 			}(forwardConn)
-		}
-		if startCallback != nil {
-			err := startCallback(ctx, forwardConn)
-			if err != nil {
-				dglogger.Errorf(ctx, "start callback error: %v", err)
+
+			if startCallback != nil {
+				err := startCallback(ctx, forwardConn)
+				if err != nil {
+					dglogger.Errorf(ctx, "start callback error: %v", err)
+				}
 			}
 		}
 
