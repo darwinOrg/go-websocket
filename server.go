@@ -181,7 +181,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 
 			mt, message, err := conn.ReadMessage()
 			if isEndFunc(mt, message) {
-				ctx.SetExtraKeyValue(WebsocketEndedKey, true)
+				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
 				if endCallback != nil && forwardConn != nil {
 					err := endCallback(ctx, conn, forwardConn)
