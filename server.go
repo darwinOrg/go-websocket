@@ -44,8 +44,8 @@ func IsWsEnded(ctx *dgctx.DgContext) bool {
 	return ok && e
 }
 
-func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
-	return nil
+func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) (forwardConn *websocket.Conn, err error) {
+	return nil, nil
 }
 
 func DefaultIsEndFunc(mt int, _ []byte) bool {
@@ -145,11 +145,15 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			}
 		}(conn)
 
+		if startFunc == nil {
+			startFunc = DefaultStartFunc
+		}
 		forwardConn, err := startFunc(ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "start websocket error: %v", err)
 			return
 		}
+
 		if forwardConn != nil {
 			defer func(wc *websocket.Conn) {
 				err := wc.Close()
@@ -166,15 +170,16 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			}
 		}
 
+		if isEndFunc == nil {
+			isEndFunc = DefaultIsEndFunc
+		}
+
 		for {
 			if IsWsEnded(ctx) {
 				break
 			}
 
 			mt, message, err := conn.ReadMessage()
-			if isEndFunc == nil {
-				isEndFunc = DefaultIsEndFunc
-			}
 			if isEndFunc(mt, message) {
 				ctx.SetExtraKeyValue(WebsocketEndedKey, true)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
