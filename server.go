@@ -25,7 +25,7 @@ type WebSocketMessage[T any] struct {
 type InitFunc func(c *gin.Context, ctx *dgctx.DgContext) error
 type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *websocket.Conn, err error)
 type IsEndFunc func(mt int, data []byte) bool
-type ForwardCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
+type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 
 const WebsocketEndedKey = "WebsocketEnded"
@@ -69,24 +69,24 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) {
-	rh.GET(rh.RelativePath, bizHandlerJson(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback))
+func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+	rh.GET(rh.RelativePath, bizHandlerJson(rh, initFunc, startFunc, isEndFunc, endCallback))
 }
 
-func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) {
-	rh.POST(rh.RelativePath, bizHandlerJson(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback))
+func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+	rh.POST(rh.RelativePath, bizHandlerJson(rh, initFunc, startFunc, isEndFunc, endCallback))
 }
 
-func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) {
-	rh.GET(rh.RelativePath, bizHandlerBytes(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback))
+func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+	rh.GET(rh.RelativePath, bizHandlerBytes(rh, initFunc, startFunc, isEndFunc, endCallback))
 }
 
-func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) {
-	rh.POST(rh.RelativePath, bizHandlerBytes(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback))
+func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+	rh.POST(rh.RelativePath, bizHandlerBytes(rh, initFunc, startFunc, isEndFunc, endCallback))
 }
 
-func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
+func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
+	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
 		req := new(T)
 		err := json.Unmarshal(data, req)
@@ -105,14 +105,14 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 	})
 }
 
-func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, initFunc, startFunc, startCallback, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
+	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
 		dglogger.Debugf(ctx, "server receive msg size: %d", len(data))
 		return &WebSocketMessage[[]byte]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: &data}, nil
 	})
 }
 
-func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, startCallback ForwardCallbackFunc, isEndFunc IsEndFunc, endCallback ForwardCallbackFunc, buildWsMessage buildWsMessageFunc[T]) gin.HandlerFunc {
+func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc, buildWsMessage buildWsMessageFunc[T]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -164,15 +164,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 					dglogger.Errorf(ctx, "close forward websocket conn error: %v", err)
 				}
 			}(forwardConn)
-
-			if startCallback != nil {
-				err := startCallback(ctx, conn, forwardConn)
-				if err != nil {
-					dglogger.Errorf(ctx, "start callback error: %v", err)
-					c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
-					return
-				}
-			}
 		}
 
 		if isEndFunc == nil {
