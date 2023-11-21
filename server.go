@@ -1,7 +1,6 @@
 package dgws
 
 import (
-	"encoding/json"
 	dgctx "github.com/darwinOrg/go-common/context"
 	dgerr "github.com/darwinOrg/go-common/enums/error"
 	"github.com/darwinOrg/go-common/result"
@@ -88,8 +87,8 @@ func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initF
 func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
 	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
-		req := new(T)
-		err := json.Unmarshal(data, req)
+		var req T
+		err := conn.ReadJSON(&req)
 		if err != nil {
 			dglogger.Errorf(ctx, "bind message to struct error: %v", err)
 			return nil, err
@@ -101,7 +100,7 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 			return nil, err
 		}
 
-		return &WebSocketMessage[T]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: req}, nil
+		return &WebSocketMessage[T]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: &req}, nil
 	})
 }
 
