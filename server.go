@@ -27,6 +27,7 @@ type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *we
 type IsEndFunc func(mt int, data []byte) bool
 type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
 type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
+type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
 
 const WebsocketEndedKey = "WebsocketEnded"
 
