@@ -52,6 +52,10 @@ func SetForwardWsEnded(ctx *dgctx.DgContext) {
 	ctx.SetExtraKeyValue(ForwardWebsocketEndedKey, true)
 }
 
+func UnsetForwardWsEnded(ctx *dgctx.DgContext) {
+	ctx.SetExtraKeyValue(ForwardWebsocketEndedKey, false)
+}
+
 func IsForwardWsEnded(ctx *dgctx.DgContext) bool {
 	ended := ctx.GetExtraValue(ForwardWebsocketEndedKey)
 	if ended == nil {
