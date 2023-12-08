@@ -32,6 +32,7 @@ type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMe
 const (
 	WebsocketEndedKey        = "WebsocketEnded"
 	ForwardWebsocketEndedKey = "ForwardWebsocketEnded"
+	ForwardConnKey           = "ForwardConn"
 )
 
 func SetWsEnded(ctx *dgctx.DgContext) {
@@ -64,6 +65,19 @@ func IsForwardWsEnded(ctx *dgctx.DgContext) bool {
 
 	e, ok := ended.(bool)
 	return ok && e
+}
+
+func SetForwardConn(ctx *dgctx.DgContext, forwardConn *websocket.Conn) {
+	ctx.SetExtraKeyValue(ForwardConnKey, forwardConn)
+}
+
+func GetForwardConn(ctx *dgctx.DgContext) *websocket.Conn {
+	forwardConn := ctx.GetExtraValue(ForwardConnKey)
+	if forwardConn == nil {
+		return nil
+	}
+
+	return forwardConn.(*websocket.Conn)
 }
 
 func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) (forwardConn *websocket.Conn, err error) {
