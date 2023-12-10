@@ -17,16 +17,15 @@ import (
 
 type WebSocketMessage[T any] struct {
 	Connection  *websocket.Conn
-	ForwardConn *websocket.Conn
 	MessageType int
 	MessageData *T
 }
 
 type InitFunc func(c *gin.Context, ctx *dgctx.DgContext) error
-type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) (forwardConn *websocket.Conn, err error)
+type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
 type IsEndFunc func(mt int, data []byte) bool
-type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn) error
-type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardCOnn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
+type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
+type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
 type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
 
 const (
@@ -80,8 +79,8 @@ func GetForwardConn(ctx *dgctx.DgContext) *websocket.Conn {
 	return forwardConn.(*websocket.Conn)
 }
 
-func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) (forwardConn *websocket.Conn, err error) {
-	return nil, nil
+func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
+	return nil
 }
 
 func DefaultIsEndFunc(mt int, _ []byte) bool {
@@ -122,7 +121,7 @@ func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initF
 }
 
 func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
+	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
 		dglogger.Infof(ctx, "server receive msg: %s", data)
 		req := new(T)
 		err := json.Unmarshal(data, req)
@@ -137,14 +136,14 @@ func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error]
 			return nil, err
 		}
 
-		return &WebSocketMessage[T]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: req}, nil
+		return &WebSocketMessage[T]{Connection: conn, MessageType: mt, MessageData: req}, nil
 	})
 }
 
 func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], initFunc InitFunc, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, forwardConn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+	return bizHandler(rh, initFunc, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
 		dglogger.Debugf(ctx, "server receive msg size: %d", len(data))
-		return &WebSocketMessage[[]byte]{Connection: conn, ForwardConn: forwardConn, MessageType: mt, MessageData: &data}, nil
+		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}, nil
 	})
 }
 
@@ -175,32 +174,23 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
-
-		defer func(wc *websocket.Conn) {
-			err := wc.Close()
-			if err != nil {
-				dglogger.Errorf(ctx, "close websocket conn error: %v", err)
-			}
-		}(conn)
+		defer conn.Close()
 
 		if startFunc == nil {
 			startFunc = DefaultStartFunc
 		}
-		forwardConn, err := startFunc(ctx, conn)
+		err = startFunc(ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "start websocket error: %v", err)
 			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
-
-		if forwardConn != nil {
-			defer func(wc *websocket.Conn) {
-				err := wc.Close()
-				if err != nil {
-					dglogger.Errorf(ctx, "close forward websocket conn error: %v", err)
-				}
-			}(forwardConn)
-		}
+		defer func() {
+			forwardConn := GetForwardConn(ctx)
+			if forwardConn != nil {
+				forwardConn.Close()
+			}
+		}()
 
 		if isEndFunc == nil {
 			isEndFunc = DefaultIsEndFunc
@@ -215,8 +205,9 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			if isEndFunc(mt, message) {
 				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
+				forwardConn := GetForwardConn(ctx)
 				if endCallback != nil && forwardConn != nil {
-					err := endCallback(ctx, conn, forwardConn)
+					err := endCallback(ctx, conn)
 					if err != nil {
 						dglogger.Errorf(ctx, "end callback error: %v", err)
 					}
@@ -239,7 +230,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 				break
 			}
 
-			wsm, err := buildWsMessage(ctx, conn, forwardConn, mt, message)
+			wsm, err := buildWsMessage(ctx, conn, mt, message)
 			if err != nil {
 				break
 			}
