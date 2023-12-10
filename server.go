@@ -29,10 +29,24 @@ type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, 
 type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
 
 const (
+	ConnKey           = "WsConn"
 	WsEndedKey        = "WsEnded"
-	ForwardWsEndedKey = "ForwardWsEnded"
 	ForwardConnKey    = "ForwardConn"
+	ForwardWsEndedKey = "WsForwardEnded"
 )
+
+func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
+	ctx.SetExtraKeyValue(ConnKey, conn)
+}
+
+func GetConn(ctx *dgctx.DgContext) *websocket.Conn {
+	conn := ctx.GetExtraValue(ConnKey)
+	if conn == nil {
+		return nil
+	}
+
+	return conn.(*websocket.Conn)
+}
 
 func SetWsEnded(ctx *dgctx.DgContext) {
 	ctx.SetExtraKeyValue(WsEndedKey, true)
@@ -46,6 +60,19 @@ func IsWsEnded(ctx *dgctx.DgContext) bool {
 
 	e, ok := ended.(bool)
 	return ok && e
+}
+
+func SetForwardConn(ctx *dgctx.DgContext, forwardMark string, conn *websocket.Conn) {
+	ctx.SetExtraKeyValue(ForwardConnKey+forwardMark, conn)
+}
+
+func GetForwardConn(ctx *dgctx.DgContext, forwardMark string) *websocket.Conn {
+	conn := ctx.GetExtraValue(ForwardConnKey + forwardMark)
+	if conn == nil {
+		return nil
+	}
+
+	return conn.(*websocket.Conn)
 }
 
 func SetForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) {
@@ -64,19 +91,6 @@ func IsForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) bool {
 
 	e, ok := ended.(bool)
 	return ok && e
-}
-
-func SetForwardConn(ctx *dgctx.DgContext, forwardMark string, forwardConn *websocket.Conn) {
-	ctx.SetExtraKeyValue(ForwardConnKey+forwardMark, forwardConn)
-}
-
-func GetForwardConn(ctx *dgctx.DgContext, forwardMark string) *websocket.Conn {
-	forwardConn := ctx.GetExtraValue(ForwardConnKey + forwardMark)
-	if forwardConn == nil {
-		return nil
-	}
-
-	return forwardConn.(*websocket.Conn)
 }
 
 func DefaultStartFunc(_ *dgctx.DgContext, _ *websocket.Conn) error {
@@ -174,6 +188,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
+		SetConn(ctx, conn)
 		defer conn.Close()
 
 		if startFunc == nil {
