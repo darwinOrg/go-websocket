@@ -29,17 +29,17 @@ type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, 
 type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
 
 const (
-	WebsocketEndedKey        = "WebsocketEnded"
-	ForwardWebsocketEndedKey = "ForwardWebsocketEnded"
-	ForwardConnKey           = "ForwardConn"
+	WsEndedKey        = "WsEnded"
+	ForwardWsEndedKey = "ForwardWsEnded"
+	ForwardConnKey    = "ForwardConn"
 )
 
 func SetWsEnded(ctx *dgctx.DgContext) {
-	ctx.SetExtraKeyValue(WebsocketEndedKey, true)
+	ctx.SetExtraKeyValue(WsEndedKey, true)
 }
 
 func IsWsEnded(ctx *dgctx.DgContext) bool {
-	ended := ctx.GetExtraValue(WebsocketEndedKey)
+	ended := ctx.GetExtraValue(WsEndedKey)
 	if ended == nil {
 		return false
 	}
@@ -48,16 +48,16 @@ func IsWsEnded(ctx *dgctx.DgContext) bool {
 	return ok && e
 }
 
-func SetForwardWsEnded(ctx *dgctx.DgContext) {
-	ctx.SetExtraKeyValue(ForwardWebsocketEndedKey, true)
+func SetForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) {
+	ctx.SetExtraKeyValue(ForwardWsEndedKey+forwardMark, true)
 }
 
-func UnsetForwardWsEnded(ctx *dgctx.DgContext) {
-	ctx.SetExtraKeyValue(ForwardWebsocketEndedKey, false)
+func UnsetForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) {
+	ctx.SetExtraKeyValue(ForwardWsEndedKey+forwardMark, false)
 }
 
-func IsForwardWsEnded(ctx *dgctx.DgContext) bool {
-	ended := ctx.GetExtraValue(ForwardWebsocketEndedKey)
+func IsForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) bool {
+	ended := ctx.GetExtraValue(ForwardWsEndedKey + forwardMark)
 	if ended == nil {
 		return false
 	}
@@ -66,12 +66,12 @@ func IsForwardWsEnded(ctx *dgctx.DgContext) bool {
 	return ok && e
 }
 
-func SetForwardConn(ctx *dgctx.DgContext, forwardConn *websocket.Conn) {
-	ctx.SetExtraKeyValue(ForwardConnKey, forwardConn)
+func SetForwardConn(ctx *dgctx.DgContext, forwardMark string, forwardConn *websocket.Conn) {
+	ctx.SetExtraKeyValue(ForwardConnKey+forwardMark, forwardConn)
 }
 
-func GetForwardConn(ctx *dgctx.DgContext) *websocket.Conn {
-	forwardConn := ctx.GetExtraValue(ForwardConnKey)
+func GetForwardConn(ctx *dgctx.DgContext, forwardMark string) *websocket.Conn {
+	forwardConn := ctx.GetExtraValue(ForwardConnKey + forwardMark)
 	if forwardConn == nil {
 		return nil
 	}
@@ -185,12 +185,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
-		defer func() {
-			forwardConn := GetForwardConn(ctx)
-			if forwardConn != nil {
-				forwardConn.Close()
-			}
-		}()
 
 		if isEndFunc == nil {
 			isEndFunc = DefaultIsEndFunc
@@ -205,8 +199,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			if isEndFunc(mt, message) {
 				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "server receive close message, error: %v", err)
-				forwardConn := GetForwardConn(ctx)
-				if endCallback != nil && forwardConn != nil {
+				if endCallback != nil {
 					err := endCallback(ctx, conn)
 					if err != nil {
 						dglogger.Errorf(ctx, "end callback error: %v", err)
