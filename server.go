@@ -6,7 +6,6 @@ import (
 	dgerr "github.com/darwinOrg/go-common/enums/error"
 	"github.com/darwinOrg/go-common/result"
 	dglogger "github.com/darwinOrg/go-logger"
-	ve "github.com/darwinOrg/go-validator-ext"
 	"github.com/darwinOrg/go-web/utils"
 	"github.com/darwinOrg/go-web/wrapper"
 	"github.com/gin-gonic/gin"
@@ -24,7 +23,7 @@ type WebSocketMessage[T any] struct {
 type StartFunc func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
 type IsEndFunc func(mt int, data []byte) bool
 type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
-type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (wsm *WebSocketMessage[T], err error)
+type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) *WebSocketMessage[T]
 type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
 
 const (
@@ -117,14 +116,6 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
-	rh.GET(rh.RelativePath, bizHandlerJson(rh, startFunc, isEndFunc, endCallback))
-}
-
-func PostJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
-	rh.POST(rh.RelativePath, bizHandlerJson(rh, startFunc, isEndFunc, endCallback))
-}
-
 func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
 	rh.GET(rh.RelativePath, bizHandlerBytes(rh, startFunc, isEndFunc, endCallback))
 }
@@ -133,30 +124,10 @@ func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], start
 	rh.POST(rh.RelativePath, bizHandlerBytes(rh, startFunc, isEndFunc, endCallback))
 }
 
-func bizHandlerJson[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[T], error) {
-		dglogger.Infof(ctx, "server receive msg: %s", data)
-		req := new(T)
-		err := json.Unmarshal(data, req)
-		if err != nil {
-			dglogger.Errorf(ctx, "bind message to struct error: %v", err)
-			return nil, err
-		}
-
-		err = ve.ValidateDefault(req)
-		if err != nil {
-			dglogger.Errorf(ctx, "validate request object error: %v", err)
-			return nil, err
-		}
-
-		return &WebSocketMessage[T]{Connection: conn, MessageType: mt, MessageData: req}, nil
-	})
-}
-
 func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) (*WebSocketMessage[[]byte], error) {
+	return bizHandler(rh, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) *WebSocketMessage[[]byte] {
 		dglogger.Debugf(ctx, "server receive msg size: %d", len(data))
-		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}, nil
+		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}
 	})
 }
 
@@ -226,11 +197,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 				break
 			}
 
-			wsm, err := buildWsMessage(ctx, conn, mt, message)
-			if err != nil {
-				break
-			}
-
+			wsm := buildWsMessage(ctx, conn, mt, message)
 			err = rh.BizHandler(c, ctx, wsm)
 			if err != nil {
 				dglogger.Errorf(ctx, "biz handle message[%s] error: %v", message, err)
