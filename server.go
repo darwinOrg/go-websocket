@@ -21,7 +21,7 @@ type WebSocketMessage[T any] struct {
 	MessageData *T
 }
 
-type InitFunc func(c *gin.Context, ctx *dgctx.DgContext) error
+type InitFunc func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
 type StartFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
 type IsEndFunc func(mt int, data []byte) bool
 type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
@@ -170,16 +170,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			}
 			defer semaphore.Release()
 		}
-
 		ctx := utils.GetDgContext(c)
-		if initFunc != nil {
-			err := initFunc(c, ctx)
-			if err != nil {
-				dglogger.Errorf(ctx, "init error: %v", err)
-				c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
-				return
-			}
-		}
 
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -190,6 +181,15 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 		}
 		SetConn(ctx, conn)
 		defer conn.Close()
+
+		if initFunc != nil {
+			err := initFunc(c, ctx, conn)
+			if err != nil {
+				dglogger.Errorf(ctx, "init error: %v", err)
+				c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
+				return
+			}
+		}
 
 		if startFunc == nil {
 			startFunc = DefaultStartFunc

@@ -46,7 +46,7 @@ func TestSendOwn(t *testing.T) {
 			dglogger.Infof(ctx, "handle message: %s", wsm.MessageData.Content)
 			return nil
 		},
-	}, nil, nil, nil, dgws.DefaultIsEndFunc, nil)
+	}, nil, nil, dgws.DefaultIsEndFunc, nil)
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
 
