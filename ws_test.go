@@ -16,11 +16,11 @@ import (
 	"time"
 )
 
-type TestData struct {
+type testData struct {
 	Content string `json:"content" binding:"required,minLength=3"`
 }
 
-var datas = []TestData{
+var datas = []testData{
 	{
 		Content: "123",
 	},
@@ -40,10 +40,10 @@ func TestSendOwn(t *testing.T) {
 	monitor.Start("test", 19002)
 	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.GetJson(&wrapper.RequestHolder[dgws.WebSocketMessage[TestData], error]{
+	dgws.GetBytes(&wrapper.RequestHolder[dgws.WebSocketMessage[[]byte], error]{
 		RouterGroup: engine.Group(path),
-		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage[TestData]) error {
-			dglogger.Infof(ctx, "handle message: %s", wsm.MessageData.Content)
+		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage[[]byte]) error {
+			dglogger.Infof(ctx, "handle message: %s", string(*wsm.MessageData))
 			return nil
 		},
 	}, nil, dgws.DefaultIsEndFunc, nil)
@@ -68,7 +68,7 @@ func TestSendProd(t *testing.T) {
 	sendMessage(ctx, "e.globalpand.cn", path, datas, 5)
 }
 
-func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []TestData, intervalSeconds time.Duration) {
+func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []testData, intervalSeconds time.Duration) {
 	u := url.URL{Scheme: "ws", Host: host, Path: path}
 	dglogger.Infof(ctx, "client connecting to %s", u.String())
 
