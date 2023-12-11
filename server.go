@@ -239,6 +239,12 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 	}
 }
 
+func WriteErrorResult(conn *websocket.Conn, err error) error {
+	rt := result.SimpleFail[string](err.Error())
+	rtBytes, _ := json.Marshal(rt)
+	return conn.WriteMessage(websocket.TextMessage, rtBytes)
+}
+
 func WriteDgErrorResult(conn *websocket.Conn, err *dgerr.DgError) error {
 	rt := result.FailByError[*dgerr.DgError](err)
 	rtBytes, _ := json.Marshal(rt)
