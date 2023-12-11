@@ -176,7 +176,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			dglogger.Errorf(ctx, "upgrade error: %v", err)
-			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
 		SetConn(ctx, conn)
@@ -186,7 +185,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 			err := initFunc(c, ctx, conn)
 			if err != nil {
 				dglogger.Errorf(ctx, "init error: %v", err)
-				c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 				return
 			}
 		}
@@ -197,7 +195,6 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], in
 		err = startFunc(ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "start websocket error: %v", err)
-			c.AbortWithStatusJSON(http.StatusOK, result.SimpleFail[string](err.Error()))
 			return
 		}
 
