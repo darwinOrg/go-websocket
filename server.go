@@ -157,6 +157,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 		err = startFunc(c, ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "start websocket error: %v", err)
+			WriteErrorResult(conn, err)
 			return
 		}
 
