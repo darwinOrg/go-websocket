@@ -239,14 +239,14 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 	}
 }
 
-func WriteErrorResult(conn *websocket.Conn, err error) error {
+func WriteErrorResult(conn *websocket.Conn, err error) {
 	rt := result.SimpleFail[string](err.Error())
 	rtBytes, _ := json.Marshal(rt)
-	return conn.WriteMessage(websocket.TextMessage, rtBytes)
+	conn.WriteMessage(websocket.TextMessage, rtBytes)
 }
 
-func WriteDgErrorResult(conn *websocket.Conn, err *dgerr.DgError) error {
+func WriteDgErrorResult(conn *websocket.Conn, err *dgerr.DgError) {
 	rt := result.FailByError[*dgerr.DgError](err)
 	rtBytes, _ := json.Marshal(rt)
-	return conn.WriteMessage(websocket.TextMessage, rtBytes)
+	conn.WriteMessage(websocket.TextMessage, rtBytes)
 }
