@@ -176,6 +176,7 @@ func bizHandler(rh *wrapper.RequestHolder[WebSocketMessage, error], startFunc St
 						dglogger.Errorf(ctx, "end callback error: %v", err)
 					}
 				}
+				conn.WriteMessage(websocket.CloseMessage, message)
 				break
 			}
 
