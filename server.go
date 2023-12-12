@@ -14,17 +14,16 @@ import (
 	"net/http"
 )
 
-type WebSocketMessage[T any] struct {
+type WebSocketMessage struct {
 	Connection  *websocket.Conn
 	MessageType int
-	MessageData *T
+	MessageData []byte
 }
 
 type StartFunc func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
 type IsEndFunc func(mt int, data []byte) bool
 type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
-type buildWsMessageFunc[T any] func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) *WebSocketMessage[T]
-type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage[T]) error
+type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage) error
 
 const (
 	ConnKey           = "WsConn"
@@ -116,22 +115,19 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage, error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
 	rh.GET(rh.RelativePath, bizHandlerBytes(rh, startFunc, isEndFunc, endCallback))
 }
 
-func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+func PostBytes(rh *wrapper.RequestHolder[WebSocketMessage, error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
 	rh.POST(rh.RelativePath, bizHandlerBytes(rh, startFunc, isEndFunc, endCallback))
 }
 
-func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage[[]byte], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
-	return bizHandler(rh, startFunc, isEndFunc, endCallback, func(ctx *dgctx.DgContext, conn *websocket.Conn, mt int, data []byte) *WebSocketMessage[[]byte] {
-		dglogger.Debugf(ctx, "server receive msg size: %d", len(data))
-		return &WebSocketMessage[[]byte]{Connection: conn, MessageType: mt, MessageData: &data}
-	})
+func bizHandlerBytes(rh *wrapper.RequestHolder[WebSocketMessage, error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
+	return bizHandler(rh, startFunc, isEndFunc, endCallback)
 }
 
-func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc, buildWsMessage buildWsMessageFunc[T]) gin.HandlerFunc {
+func bizHandler(rh *wrapper.RequestHolder[WebSocketMessage, error], startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -198,7 +194,7 @@ func bizHandler[T any](rh *wrapper.RequestHolder[WebSocketMessage[T], error], st
 				break
 			}
 
-			wsm := buildWsMessage(ctx, conn, mt, message)
+			wsm := &WebSocketMessage{Connection: conn, MessageType: mt, MessageData: message}
 			err = rh.BizHandler(c, ctx, wsm)
 			if err != nil {
 				dglogger.Errorf(ctx, "biz handle message[%s] error: %v", message, err)
