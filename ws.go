@@ -120,6 +120,13 @@ func DoneWaitGroup(ctx *dgctx.DgContext) {
 	}
 }
 
+func WaitGroupAllDone(ctx *dgctx.DgContext) {
+	waitGroup := GetWaitGroup(ctx)
+	if waitGroup != nil {
+		waitGroup.Wait()
+	}
+}
+
 func DefaultStartFunc(_ *gin.Context, _ *dgctx.DgContext, _ *websocket.Conn) error {
 	return nil
 }
