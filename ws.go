@@ -93,6 +93,11 @@ func IsForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) bool {
 	return ok && e
 }
 
+func InitWaitGroup(ctx *dgctx.DgContext) {
+	var waitGroup sync.WaitGroup
+	SetWaitGroup(ctx, &waitGroup)
+}
+
 func SetWaitGroup(ctx *dgctx.DgContext, waitGroup *sync.WaitGroup) {
 	ctx.SetExtraKeyValue(WaitGroupKey, waitGroup)
 }
