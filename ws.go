@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rolandhe/saber/gocc"
 	"net/http"
+	"sync"
 )
 
 type WebSocketMessage struct {
@@ -27,10 +28,11 @@ type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
 type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage) error
 
 const (
-	ConnKey           = "WsConn"
-	WsEndedKey        = "WsEnded"
-	ForwardConnKey    = "ForwardConn"
-	ForwardWsEndedKey = "WsForwardEnded"
+	ConnKey         = "WsConn"
+	EndedKey        = "WsEnded"
+	ForwardConnKey  = "WsForwardConn"
+	ForwardEndedKey = "WsForwardEnded"
+	WaitGroupKey    = "WsWaitGroup"
 )
 
 func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
@@ -47,11 +49,11 @@ func GetConn(ctx *dgctx.DgContext) *websocket.Conn {
 }
 
 func SetWsEnded(ctx *dgctx.DgContext) {
-	ctx.SetExtraKeyValue(WsEndedKey, true)
+	ctx.SetExtraKeyValue(EndedKey, true)
 }
 
 func IsWsEnded(ctx *dgctx.DgContext) bool {
-	ended := ctx.GetExtraValue(WsEndedKey)
+	ended := ctx.GetExtraValue(EndedKey)
 	if ended == nil {
 		return false
 	}
@@ -74,21 +76,34 @@ func GetForwardConn(ctx *dgctx.DgContext, forwardMark string) *websocket.Conn {
 }
 
 func SetForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) {
-	ctx.SetExtraKeyValue(ForwardWsEndedKey+forwardMark, true)
+	ctx.SetExtraKeyValue(ForwardEndedKey+forwardMark, true)
 }
 
 func UnsetForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) {
-	ctx.SetExtraKeyValue(ForwardWsEndedKey+forwardMark, false)
+	ctx.SetExtraKeyValue(ForwardEndedKey+forwardMark, false)
 }
 
 func IsForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) bool {
-	ended := ctx.GetExtraValue(ForwardWsEndedKey + forwardMark)
+	ended := ctx.GetExtraValue(ForwardEndedKey + forwardMark)
 	if ended == nil {
 		return false
 	}
 
 	e, ok := ended.(bool)
 	return ok && e
+}
+
+func SetWaitGroup(ctx *dgctx.DgContext, waitGroup *sync.WaitGroup) {
+	ctx.SetExtraKeyValue(WaitGroupKey, waitGroup)
+}
+
+func GetWaitGroup(ctx *dgctx.DgContext) *sync.WaitGroup {
+	waitGroup := ctx.GetExtraValue(WaitGroupKey)
+	if waitGroup == nil {
+		return nil
+	}
+
+	return waitGroup.(*sync.WaitGroup)
 }
 
 func DefaultStartFunc(_ *gin.Context, _ *dgctx.DgContext, _ *websocket.Conn) error {
@@ -116,7 +131,7 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func GetBytes(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getBizIdHandler GetBizIdHandler, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getBizIdHandler GetBizIdHandler, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
 	rh.GET(rh.RelativePath, func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {

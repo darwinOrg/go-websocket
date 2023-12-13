@@ -40,7 +40,7 @@ func TestSendOwn(t *testing.T) {
 	monitor.Start("test", 19002)
 	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.GetBytes(&wrapper.RequestHolder[dgws.WebSocketMessage[[]byte], error]{
+	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage[[]byte], error]{
 		RouterGroup: engine.Group(path),
 		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage[[]byte]) error {
 			dglogger.Infof(ctx, "handle message: %s", string(*wsm.MessageData))
