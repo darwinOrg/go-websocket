@@ -40,13 +40,13 @@ func TestSendOwn(t *testing.T) {
 	monitor.Start("test", 19002)
 	path := "/echo"
 	engine := wrapper.DefaultEngine()
-	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage[[]byte], error]{
+	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage, error]{
 		RouterGroup: engine.Group(path),
-		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage[[]byte]) error {
-			dglogger.Infof(ctx, "handle message: %s", string(*wsm.MessageData))
+		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage) error {
+			dglogger.Infof(ctx, "handle message: %s", string(wsm.MessageData))
 			return nil
 		},
-	}, nil, dgws.DefaultIsEndFunc, nil)
+	}, "", nil, nil, dgws.DefaultIsEndFunc, nil)
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
 
