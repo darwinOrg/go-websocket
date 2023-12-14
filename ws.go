@@ -192,7 +192,12 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		err = conf.StartHandler(c, ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "[%s: %s] start websocket error: %v", bizKey, bizId, err)
-			WriteErrorResult(conn, err)
+			switch err.(type) {
+			case *dgerr.DgError:
+				WriteDgErrorResult(conn, err.(*dgerr.DgError))
+			default:
+				WriteErrorResult(conn, err)
+			}
 			return
 		}
 
