@@ -3,12 +3,12 @@ module github.com/darwinOrg/go-websocket
 go 1.19
 
 require (
-	github.com/darwinOrg/go-common v0.1.1
+	github.com/darwinOrg/go-common v0.1.2
 	github.com/darwinOrg/go-logger v0.0.5
 	github.com/darwinOrg/go-monitor v0.0.3
 	github.com/darwinOrg/go-web v0.0.24
 	github.com/gin-gonic/gin v1.9.1
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/rolandhe/saber v0.0.4
 )
