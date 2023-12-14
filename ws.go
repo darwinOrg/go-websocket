@@ -15,17 +15,24 @@ import (
 	"sync"
 )
 
+type GetBizIdHandler func(c *gin.Context) string
+type StartHandler func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
+type IsEndedHandler func(mt int, data []byte) bool
+type EndCallbackHandler func(ctx *dgctx.DgContext, conn *websocket.Conn) error
+
 type WebSocketMessage struct {
 	Connection  *websocket.Conn
 	MessageType int
 	MessageData []byte
 }
 
-type GetBizIdHandler func(c *gin.Context) string
-type StartFunc func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
-type IsEndFunc func(mt int, data []byte) bool
-type EndCallbackFunc func(ctx *dgctx.DgContext, conn *websocket.Conn) error
-type WebSocketMessageCallback[T any] func(ctx *dgctx.DgContext, wsm *WebSocketMessage) error
+type WebSocketHandlerConfig struct {
+	BizKey             string
+	GetBizIdHandler    GetBizIdHandler
+	StartHandler       StartHandler
+	IsEndedHandler     IsEndedHandler
+	EndCallbackHandler EndCallbackHandler
+}
 
 const (
 	ConnKey         = "WsConn"
@@ -132,11 +139,11 @@ func WaitGroupAllDone(ctx *dgctx.DgContext) {
 	}
 }
 
-func DefaultStartFunc(_ *gin.Context, _ *dgctx.DgContext, _ *websocket.Conn) error {
+func DefaultStartHandler(_ *gin.Context, _ *dgctx.DgContext, _ *websocket.Conn) error {
 	return nil
 }
 
-func DefaultIsEndFunc(mt int, _ []byte) bool {
+func DefaultIsEndHandler(mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
 }
 
@@ -157,7 +164,7 @@ func SetCheckOrigin(checkOriginFunc func(r *http.Request) bool) {
 	upgrader.CheckOrigin = checkOriginFunc
 }
 
-func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getBizIdHandler GetBizIdHandler, startFunc StartFunc, isEndFunc IsEndFunc, endCallback EndCallbackFunc) {
+func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHandlerConfig) {
 	rh.GET(rh.RelativePath, func(c *gin.Context) {
 		if semaphore != nil {
 			if !semaphore.TryAcquire() {
@@ -167,7 +174,8 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getB
 			defer semaphore.Release()
 		}
 		ctx := utils.GetDgContext(c)
-		bizId := getBizIdHandler(c)
+		bizKey := conf.BizKey
+		bizId := conf.GetBizIdHandler(c)
 
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -178,18 +186,18 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getB
 		SetConn(ctx, conn)
 		defer conn.Close()
 
-		if startFunc == nil {
-			startFunc = DefaultStartFunc
+		if conf.StartHandler == nil {
+			conf.StartHandler = DefaultStartHandler
 		}
-		err = startFunc(c, ctx, conn)
+		err = conf.StartHandler(c, ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "[%s: %s] start websocket error: %v", bizKey, bizId, err)
 			WriteErrorResult(conn, err)
 			return
 		}
 
-		if isEndFunc == nil {
-			isEndFunc = DefaultIsEndFunc
+		if conf.IsEndedHandler == nil {
+			conf.IsEndedHandler = DefaultIsEndHandler
 		}
 
 		for {
@@ -198,11 +206,11 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], bizKey string, getB
 			}
 
 			mt, message, err := conn.ReadMessage()
-			if isEndFunc(mt, message) {
+			if conf.IsEndedHandler(mt, message) {
 				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "[%s: %s] server receive close message, error: %v", bizKey, bizId, err)
-				if endCallback != nil {
-					err := endCallback(ctx, conn)
+				if conf.EndCallbackHandler != nil {
+					err := conf.EndCallbackHandler(ctx, conn)
 					if err != nil {
 						dglogger.Errorf(ctx, "[%s: %s] end callback error: %v", bizKey, bizId, err)
 					}

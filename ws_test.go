@@ -46,7 +46,15 @@ func TestSendOwn(t *testing.T) {
 			dglogger.Infof(ctx, "handle message: %s", string(wsm.MessageData))
 			return nil
 		},
-	}, "", nil, nil, dgws.DefaultIsEndFunc, nil)
+	}, &dgws.WebSocketHandlerConfig{
+		BizKey: "bizId",
+		GetBizIdHandler: func(c *gin.Context) string {
+			return c.Query("bizId")
+		},
+		StartHandler:       nil,
+		IsEndedHandler:     dgws.DefaultIsEndHandler,
+		EndCallbackHandler: nil,
+	})
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
 
