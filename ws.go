@@ -2,6 +2,7 @@ package dgws
 
 import (
 	"encoding/json"
+	"errors"
 	dgctx "github.com/darwinOrg/go-common/context"
 	dgerr "github.com/darwinOrg/go-common/enums/error"
 	"github.com/darwinOrg/go-common/result"
@@ -192,8 +193,9 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		err = conf.StartHandler(c, ctx, conn)
 		if err != nil {
 			dglogger.Errorf(ctx, "[%s: %s] start websocket error: %v", bizKey, bizId, err)
-			switch err.(type) {
-			case *dgerr.DgError:
+			var dgError *dgerr.DgError
+			switch {
+			case errors.As(err, &dgError):
 				WriteDgErrorResult(conn, err.(*dgerr.DgError))
 			default:
 				WriteErrorResult(conn, err)
