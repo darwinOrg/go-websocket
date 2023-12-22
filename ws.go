@@ -36,11 +36,12 @@ type WebSocketHandlerConfig struct {
 }
 
 const (
-	ConnKey         = "WsConn"
-	EndedKey        = "WsEnded"
-	ForwardConnKey  = "WsForwardConn"
-	ForwardEndedKey = "WsForwardEnded"
-	WaitGroupKey    = "WsWaitGroup"
+	ConnKey                 = "WsConn"
+	EndedKey                = "WsEnded"
+	ForwardConnKey          = "WsForwardConn"
+	ForwardConnTimestampKey = "WsForwardConnTimestamp"
+	ForwardEndedKey         = "WsForwardEnded"
+	WaitGroupKey            = "WsWaitGroup"
 )
 
 func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
@@ -99,6 +100,19 @@ func IsForwardWsEnded(ctx *dgctx.DgContext, forwardMark string) bool {
 
 	e, ok := ended.(bool)
 	return ok && e
+}
+
+func SetForwardConnTimestamp(ctx *dgctx.DgContext, forwardMark string, ts int64) {
+	ctx.SetExtraKeyValue(ForwardConnTimestampKey+forwardMark, ts)
+}
+
+func GetForwardConnTimestamp(ctx *dgctx.DgContext, forwardMark string) int64 {
+	ts := ctx.GetExtraValue(ForwardConnTimestampKey + forwardMark)
+	if ts == nil {
+		return 0
+	}
+
+	return ts.(int64)
 }
 
 func InitWaitGroup(ctx *dgctx.DgContext) {
