@@ -1,13 +1,13 @@
 package dgws_test
 
 import (
+	dgws "codeup.aliyun.com/64f57a14f82f735b8cef720b/server/go-websocket.git"
 	"encoding/json"
 	"fmt"
 	dgctx "github.com/darwinOrg/go-common/context"
 	dglogger "github.com/darwinOrg/go-logger"
 	"github.com/darwinOrg/go-monitor"
 	"github.com/darwinOrg/go-web/wrapper"
-	dgws "github.com/darwinOrg/go-websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"

@@ -1,4 +1,4 @@
-module github.com/darwinOrg/go-websocket
+module codeup.aliyun.com/64f57a14f82f735b8cef720b/server/go-websocket.git
 
 go 1.19
 
