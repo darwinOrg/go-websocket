@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rolandhe/saber/gocc"
+	"net"
 	"net/http"
 	"sync"
 )
@@ -227,6 +228,15 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			}
 
 			mt, message, err := conn.ReadMessage()
+			if err != nil {
+				var ne net.Error
+				switch {
+				case errors.As(err, &ne):
+					dglogger.Errorf(ctx, "[%s: %s] server read message net error", bizKey, bizId)
+					break
+				}
+			}
+
 			if conf.IsEndedHandler(mt, message) {
 				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "[%s: %s] server receive close message, error: %v", bizKey, bizId, err)
@@ -236,23 +246,23 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 						dglogger.Errorf(ctx, "[%s: %s] end callback error: %v", bizKey, bizId, err)
 					}
 				}
-				conn.WriteMessage(websocket.CloseMessage, message)
+				_ = conn.WriteMessage(websocket.CloseMessage, message)
 				break
-			}
-
-			if mt == websocket.PingMessage {
-				dglogger.Infof(ctx, "[%s: %s] server receive ping message", bizKey, bizId)
-				conn.WriteMessage(websocket.PongMessage, []byte("ok"))
-				continue
-			}
-
-			if mt == websocket.PongMessage {
-				continue
 			}
 
 			if err != nil {
 				dglogger.Errorf(ctx, "[%s: %s] server read error: %v", bizKey, bizId, err)
 				break
+			}
+
+			if mt == websocket.PingMessage {
+				dglogger.Infof(ctx, "[%s: %s] server receive ping message", bizKey, bizId)
+				_ = conn.WriteMessage(websocket.PongMessage, []byte("ok"))
+				continue
+			}
+
+			if mt == websocket.PongMessage {
+				continue
 			}
 
 			wsm := &WebSocketMessage{Connection: conn, MessageType: mt, MessageData: message}
@@ -267,11 +277,11 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 func WriteErrorResult(conn *websocket.Conn, err error) {
 	rt := result.SimpleFail[string](err.Error())
 	rtBytes, _ := json.Marshal(rt)
-	conn.WriteMessage(websocket.TextMessage, rtBytes)
+	_ = conn.WriteMessage(websocket.TextMessage, rtBytes)
 }
 
 func WriteDgErrorResult(conn *websocket.Conn, err *dgerr.DgError) {
 	rt := result.FailByError[*dgerr.DgError](err)
 	rtBytes, _ := json.Marshal(rt)
-	conn.WriteMessage(websocket.TextMessage, rtBytes)
+	_ = conn.WriteMessage(websocket.TextMessage, rtBytes)
 }
