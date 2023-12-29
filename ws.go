@@ -268,7 +268,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			wsm := &WebSocketMessage{Connection: conn, MessageType: mt, MessageData: message}
 			err = rh.BizHandler(c, ctx, wsm)
 			if err != nil {
-				dglogger.Errorf(ctx, "[%s: %s] biz handle message[%s] error: %v", message, bizKey, bizId, err)
+				dglogger.Errorf(ctx, "[%s: %s] biz handle message error: %v", bizKey, bizId, err)
 			}
 		}
 	})
