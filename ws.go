@@ -255,12 +255,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 				break
 			}
 
-			if mt == websocket.PingMessage {
-				dglogger.Infof(ctx, "[%s: %s] server receive ping message", bizKey, bizId)
-				_ = conn.WriteMessage(websocket.PongMessage, []byte("ok"))
-				continue
-			}
-
 			if mt == websocket.PongMessage {
 				continue
 			}
