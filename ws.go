@@ -19,7 +19,7 @@ import (
 
 type GetBizIdHandler func(c *gin.Context) string
 type StartHandler func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
-type IsEndedHandler func(mt int, data []byte) bool
+type IsEndedHandler func(ctx *dgctx.DgContext, mt int, data []byte) bool
 type EndCallbackHandler func(ctx *dgctx.DgContext, conn *websocket.Conn) error
 
 type WebSocketMessage struct {
@@ -159,7 +159,7 @@ func DefaultStartHandler(_ *gin.Context, _ *dgctx.DgContext, _ *websocket.Conn) 
 	return nil
 }
 
-func DefaultIsEndHandler(mt int, _ []byte) bool {
+func DefaultIsEndHandler(_ *dgctx.DgContext, mt int, _ []byte) bool {
 	return mt == websocket.CloseMessage || mt == -1
 }
 
@@ -237,7 +237,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 				}
 			}
 
-			if conf.IsEndedHandler(mt, message) {
+			if conf.IsEndedHandler(ctx, mt, message) {
 				SetWsEnded(ctx)
 				dglogger.Infof(ctx, "[%s: %s] server receive close message, error: %v", bizKey, bizId, err)
 				if conf.EndCallbackHandler != nil {
