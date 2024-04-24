@@ -6,7 +6,7 @@ require (
 	github.com/darwinOrg/go-common v0.1.38
 	github.com/darwinOrg/go-logger v0.0.6
 	github.com/darwinOrg/go-monitor v0.0.3
-	github.com/darwinOrg/go-web v0.1.23
+	github.com/darwinOrg/go-web v0.1.24
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
