@@ -190,9 +190,14 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			}
 			defer semaphore.Release()
 		}
-		ctx := utils.GetDgContext(c)
+
 		bizKey := conf.BizKey
-		bizId := conf.GetBizIdHandler(c)
+		var bizId string
+		if bizKey != "" && conf.GetBizIdHandler != nil {
+			bizId = conf.GetBizIdHandler(c)
+		}
+
+		ctx := utils.GetDgContext(c)
 
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
