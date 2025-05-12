@@ -197,18 +197,20 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		// 服务升级，对于来到的http连接进行服务升级，升级到ws
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			dglogger.Errorf(ctx, "[%s: %s] upgrade error: %v", bizKey, bizId, err)
+			dglogger.Errorw(ctx, "upgrade error", "err", err, bizKey, bizId)
 			return
 		}
 		SetConn(ctx, conn)
-		defer conn.Close()
+		defer func() {
+			_ = conn.Close()
+		}()
 
 		if conf.StartHandler == nil {
 			conf.StartHandler = DefaultStartHandler
 		}
 		err = conf.StartHandler(c, ctx, conn)
 		if err != nil {
-			dglogger.Errorf(ctx, "[%s: %s] start websocket error: %v", bizKey, bizId, err)
+			dglogger.Errorw(ctx, "start websocket error", "err", err, bizKey, bizId)
 			var dgError *dgerr.DgError
 			switch {
 			case errors.As(err, &dgError):
@@ -233,18 +235,18 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 				var ne net.Error
 				switch {
 				case errors.As(err, &ne):
-					dglogger.Errorf(ctx, "[%s: %s] server read message net error", bizKey, bizId)
+					dglogger.Errorw(ctx, "server read message net error", bizKey, bizId)
 					break
 				}
 			}
 
 			if conf.IsEndedHandler(ctx, mt, message) {
 				SetWsEnded(ctx)
-				dglogger.Infof(ctx, "[%s: %s] server receive close message, error: %v", bizKey, bizId, err)
+				dglogger.Infow(ctx, "server receive close message error", "err", err, bizKey, bizId)
 				if conf.EndCallbackHandler != nil {
 					err := conf.EndCallbackHandler(ctx, conn)
 					if err != nil {
-						dglogger.Errorf(ctx, "[%s: %s] end callback error: %v", bizKey, bizId, err)
+						dglogger.Errorw(ctx, "end callback error", "err", err, bizKey, bizId)
 					}
 				}
 				_ = conn.WriteMessage(websocket.CloseMessage, message)
@@ -252,7 +254,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			}
 
 			if err != nil {
-				dglogger.Errorf(ctx, "[%s: %s] server read error: %v", bizKey, bizId, err)
+				dglogger.Errorw(ctx, "server read error", "err", err, bizKey, bizId)
 				break
 			}
 
@@ -263,7 +265,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			wsm := &WebSocketMessage{Connection: conn, MessageType: mt, MessageData: message}
 			err = rh.BizHandler(c, ctx, wsm)
 			if err != nil {
-				dglogger.Errorf(ctx, "[%s: %s] biz handle message error: %v", bizKey, bizId, err)
+				dglogger.Errorw(ctx, "biz handle message error", "err", err, bizKey, bizId)
 			}
 		}
 	}
