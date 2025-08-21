@@ -3,6 +3,10 @@ package dgws
 import (
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
+	"sync"
+
 	dgcoll "github.com/darwinOrg/go-common/collection"
 	dgctx "github.com/darwinOrg/go-common/context"
 	dgerr "github.com/darwinOrg/go-common/enums/error"
@@ -13,9 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rolandhe/saber/gocc"
-	"net"
-	"net/http"
-	"sync"
 )
 
 type GetBizIdHandler func(c *gin.Context) string
