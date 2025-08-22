@@ -20,29 +20,31 @@ import (
 	"github.com/rolandhe/saber/gocc"
 )
 
-type GetBizIdHandler func(c *gin.Context) string
-type StartHandler func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
-type IsEndedHandler func(ctx *dgctx.DgContext, mt int, data []byte) bool
-type EndCallbackHandler func(ctx *dgctx.DgContext, conn *websocket.Conn) error
+type (
+	GetBizIdHandler    func(c *gin.Context) string
+	StartHandler       func(c *gin.Context, ctx *dgctx.DgContext, conn *websocket.Conn) error
+	IsEndedHandler     func(ctx *dgctx.DgContext, mt int, data []byte) bool
+	EndCallbackHandler func(ctx *dgctx.DgContext, conn *websocket.Conn) error
 
-type WebSocketMessage struct {
-	Connection  *websocket.Conn
-	MessageType int
-	MessageData []byte
-}
+	WebSocketMessage struct {
+		Connection  *websocket.Conn
+		MessageType int
+		MessageData []byte
+	}
 
-type WebSocketHandlerConfig struct {
-	BizKey             string
-	GetBizIdHandler    GetBizIdHandler
-	StartHandler       StartHandler
-	IsEndedHandler     IsEndedHandler
-	EndCallbackHandler EndCallbackHandler
+	WebSocketHandlerConfig struct {
+		BizKey             string
+		GetBizIdHandler    GetBizIdHandler
+		StartHandler       StartHandler
+		IsEndedHandler     IsEndedHandler
+		EndCallbackHandler EndCallbackHandler
 
-	UpgradeTimeout time.Duration
-	PongWait       time.Duration
-	WriteWait      time.Duration
-	PingPeriod     time.Duration
-}
+		UpgradeTimeout time.Duration
+		PongWait       time.Duration
+		WriteWait      time.Duration
+		PingPeriod     time.Duration
+	}
+)
 
 const (
 	ConnKey                 = "WsConn"
