@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	dgcoll "github.com/darwinOrg/go-common/collection"
 	dgctx "github.com/darwinOrg/go-common/context"
@@ -36,6 +37,11 @@ type WebSocketHandlerConfig struct {
 	StartHandler       StartHandler
 	IsEndedHandler     IsEndedHandler
 	EndCallbackHandler EndCallbackHandler
+
+	UpgradeTimeout time.Duration
+	PongWait       time.Duration
+	WriteWait      time.Duration
+	PingPeriod     time.Duration
 }
 
 const (
@@ -45,6 +51,13 @@ const (
 	ForwardConnTimestampKey = "WsForwardConnTimestamp"
 	ForwardEndedKey         = "WsForwardEnded"
 	WaitGroupKey            = "WsWaitGroup"
+)
+
+var (
+	UpgradeTimeout = 5 * time.Second
+	PongWait       = 60 * time.Second
+	WriteWait      = 10 * time.Second
+	PingPeriod     = (PongWait * 9) / 10
 )
 
 func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
@@ -200,13 +213,43 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 
 		ctx := utils.GetDgContext(c)
 
-		// 服务升级，对于来到的http连接进行服务升级，升级到ws
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		// 服务升级，对于来到的http连接进行服务升级，升级到ws，设置5秒超时
+		var upgradeTimeout time.Duration
+		if conf.UpgradeTimeout > 0 {
+			upgradeTimeout = conf.UpgradeTimeout
+		} else {
+			upgradeTimeout = UpgradeTimeout
+		}
+		conn, err := upgradeWithTimeout(c, upgradeTimeout)
 		if err != nil {
-			dglogger.Errorw(ctx, "upgrade error", "err", err, bizKey, bizId)
+			dglogger.Errorw(ctx, "websocket upgrade failed", "err", err, bizKey, bizId)
+			c.AbortWithStatusJSON(http.StatusBadRequest, result.SimpleFail[string]("websocket upgrade failed"))
 			return
 		}
+
+		var pongWait time.Duration
+		if conf.PongWait > 0 {
+			pongWait = conf.PongWait
+		} else {
+			pongWait = PongWait
+		}
+
+		var writeWait time.Duration
+		if conf.WriteWait > 0 {
+			writeWait = conf.WriteWait
+		} else {
+			writeWait = WriteWait
+		}
+
+		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+		conn.SetPongHandler(func(appData string) error {
+			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+			return nil
+		})
+
 		SetConn(ctx, conn)
+
 		defer func() {
 			_ = conn.Close()
 		}()
@@ -217,18 +260,17 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		err = conf.StartHandler(c, ctx, conn)
 		if err != nil {
 			dglogger.Errorw(ctx, "start websocket error", "err", err, bizKey, bizId)
-			var dgError *dgerr.DgError
-			switch {
-			case errors.As(err, &dgError):
-				WriteDgErrorResult(conn, err.(*dgerr.DgError))
-			default:
-				WriteErrorResult(conn, err)
-			}
+			handleWsError(conn, err)
 			return
 		}
 
 		if conf.IsEndedHandler == nil {
 			conf.IsEndedHandler = DefaultIsEndHandler
+		}
+
+		if conf.PingPeriod > 0 {
+			// 启动心跳机制
+			startPing(ctx, conn, conf.PingPeriod, writeWait)
 		}
 
 		for {
@@ -241,14 +283,18 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 				var ne net.Error
 				switch {
 				case errors.As(err, &ne):
-					dglogger.Errorw(ctx, "server read message net error", bizKey, bizId)
-					break
+					dglogger.Errorw(ctx, "server read message net error", "err", err, bizKey, bizId)
+					SetWsEnded(ctx)
+				default:
+					dglogger.Errorw(ctx, "server read error", "err", err, bizKey, bizId)
+					SetWsEnded(ctx)
 				}
+				break
 			}
 
 			if conf.IsEndedHandler(ctx, mt, message) {
 				SetWsEnded(ctx)
-				dglogger.Infow(ctx, "server receive close message error", "err", err, bizKey, bizId)
+				dglogger.Infow(ctx, "server receive close message", bizKey, bizId)
 				if conf.EndCallbackHandler != nil {
 					err := conf.EndCallbackHandler(ctx, conn)
 					if err != nil {
@@ -265,6 +311,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			}
 
 			if mt == websocket.PongMessage {
+				_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 				continue
 			}
 
@@ -282,6 +329,55 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 	}
 
 	rh.GET(rh.RelativePath, handlersChain...)
+}
+
+func upgradeWithTimeout(c *gin.Context, timeout time.Duration) (*websocket.Conn, error) {
+	connChan := make(chan *websocket.Conn, 1)
+	errChan := make(chan error, 1)
+
+	go func() {
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		connChan <- conn
+	}()
+
+	select {
+	case conn := <-connChan:
+		return conn, nil
+	case err := <-errChan:
+		return nil, err
+	case <-time.After(timeout):
+		return nil, errors.New("websocket upgrade timeout")
+	}
+}
+
+func startPing(ctx *dgctx.DgContext, conn *websocket.Conn, pingPeriod, writeWait time.Duration) {
+	go func() {
+		for {
+			time.Sleep(pingPeriod)
+
+			if IsWsEnded(ctx) {
+				return
+			}
+
+			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+				dglogger.Errorw(ctx, "ping failed", "err", err)
+			}
+		}
+	}()
+}
+
+func handleWsError(conn *websocket.Conn, err error) {
+	var dgError *dgerr.DgError
+	switch {
+	case errors.As(err, &dgError):
+		WriteDgErrorResult(conn, err.(*dgerr.DgError))
+	default:
+		WriteErrorResult(conn, err)
+	}
 }
 
 func WriteErrorResult(conn *websocket.Conn, err error) {

@@ -3,6 +3,10 @@ package dgws_test
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"testing"
+	"time"
+
 	dgctx "github.com/darwinOrg/go-common/context"
 	dglogger "github.com/darwinOrg/go-logger"
 	"github.com/darwinOrg/go-monitor"
@@ -11,9 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"net/url"
-	"testing"
-	"time"
 )
 
 type testData struct {
@@ -38,10 +39,12 @@ var datas = []testData{
 func TestSendOwn(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	monitor.Start("test", 19002)
-	path := "/echo"
 	engine := wrapper.DefaultEngine()
+	path := "/public/v1/ws/test"
 	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage, error]{
-		RouterGroup: engine.Group(path),
+		RouterGroup:  engine.Group(""),
+		RelativePath: path,
+		NonLogin:     true,
 		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage) error {
 			dglogger.Infof(ctx, "handle message: %s", string(wsm.MessageData))
 			return nil
@@ -54,6 +57,7 @@ func TestSendOwn(t *testing.T) {
 		StartHandler:       nil,
 		IsEndedHandler:     dgws.DefaultIsEndHandler,
 		EndCallbackHandler: nil,
+		PingPeriod:         time.Second * 3,
 	})
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
@@ -66,7 +70,7 @@ func TestSendLocal(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	path := "/public/v1/ws/test"
 	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:9090", path, datas, 5)
+	sendMessage(ctx, "localhost:8080", path, datas, 5)
 }
 
 func TestSendProd(t *testing.T) {
