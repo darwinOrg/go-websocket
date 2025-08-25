@@ -1,14 +1,13 @@
 package dgws
 
 import (
+	"sync/atomic"
+
 	dgctx "github.com/darwinOrg/go-common/context"
-	dghttp "github.com/darwinOrg/go-httpclient"
 	dglogger "github.com/darwinOrg/go-logger"
 	"github.com/darwinOrg/go-web/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"net/http"
-	"sync/atomic"
 )
 
 func WebSocketForward(c *gin.Context, url string) {
@@ -23,9 +22,7 @@ func WebSocketForward(c *gin.Context, url string) {
 		return
 	}
 
-	wsHeader := http.Header{}
-	dghttp.FillHeadersWithDgContext(ctx, wsHeader)
-	internalConn, _, err := websocket.DefaultDialer.Dial(url, wsHeader)
+	internalConn, _, err := websocket.DefaultDialer.Dial(url, c.Request.Header)
 	if internalConn != nil {
 		defer func() { _ = internalConn.Close() }()
 	}

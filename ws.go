@@ -56,10 +56,10 @@ const (
 )
 
 var (
-	UpgradeTimeout = 5 * time.Second
-	//PongWait       = 60 * time.Second
-	//WriteWait      = 10 * time.Second
-	//PingPeriod     = (PongWait * 9) / 10
+	DefaultUpgradeTimeout = 5 * time.Second
+	DefaultPongWait       = 60 * time.Second
+	DefaultWriteWait      = 10 * time.Second
+	DefaultPingPeriod     = (DefaultPongWait * 9) / 10
 )
 
 func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
@@ -215,12 +215,12 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 
 		ctx := utils.GetDgContext(c)
 
-		// 服务升级，对于来到的http连接进行服务升级，升级到ws，设置5秒超时
+		// 服务升级，对于来到的http连接进行服务升级，升级到ws，设置超时时间
 		var upgradeTimeout time.Duration
 		if conf.UpgradeTimeout > 0 {
 			upgradeTimeout = conf.UpgradeTimeout
 		} else {
-			upgradeTimeout = UpgradeTimeout
+			upgradeTimeout = DefaultUpgradeTimeout
 		}
 		conn, err := upgradeWithTimeout(c, upgradeTimeout)
 		if err != nil {
@@ -229,26 +229,17 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			return
 		}
 
-		//var pongWait time.Duration
-		//if conf.PongWait > 0 {
-		//	pongWait = conf.PongWait
-		//} else {
-		//	pongWait = PongWait
-		//}
-		//
-		//var writeWait time.Duration
-		//if conf.WriteWait > 0 {
-		//	writeWait = conf.WriteWait
-		//} else {
-		//	writeWait = WriteWait
-		//}
-		//
-		//_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-		//_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
-		//conn.SetPongHandler(func(appData string) error {
-		//	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-		//	return nil
-		//})
+		if conf.PongWait > 0 {
+			_ = conn.SetReadDeadline(time.Now().Add(conf.PongWait))
+			conn.SetPongHandler(func(appData string) error {
+				_ = conn.SetReadDeadline(time.Now().Add(conf.PongWait))
+				return nil
+			})
+		}
+
+		if conf.WriteWait > 0 {
+			_ = conn.SetWriteDeadline(time.Now().Add(conf.WriteWait))
+		}
 
 		SetConn(ctx, conn)
 
@@ -270,10 +261,13 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			conf.IsEndedHandler = DefaultIsEndHandler
 		}
 
-		//if conf.PingPeriod > 0 {
-		//	// 启动心跳机制
-		//	startPing(ctx, conn, conf.PingPeriod, writeWait)
-		//}
+		if conf.PingPeriod > 0 {
+			var deadline time.Time
+			if conf.WriteWait > 0 {
+				deadline = time.Now().Add(conf.WriteWait)
+			}
+			startPing(ctx, conn, conf.PingPeriod, deadline)
+		}
 
 		for {
 			if IsWsEnded(ctx) {
@@ -356,7 +350,7 @@ func upgradeWithTimeout(c *gin.Context, timeout time.Duration) (*websocket.Conn,
 	}
 }
 
-func startPing(ctx *dgctx.DgContext, conn *websocket.Conn, pingPeriod, writeWait time.Duration) {
+func startPing(ctx *dgctx.DgContext, conn *websocket.Conn, pingPeriod time.Duration, deadline time.Time) {
 	go func() {
 		for {
 			time.Sleep(pingPeriod)
@@ -365,7 +359,7 @@ func startPing(ctx *dgctx.DgContext, conn *websocket.Conn, pingPeriod, writeWait
 				return
 			}
 
-			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+			if err := conn.WriteControl(websocket.PingMessage, []byte{}, deadline); err != nil {
 				dglogger.Errorw(ctx, "ping failed", "err", err)
 			}
 		}
