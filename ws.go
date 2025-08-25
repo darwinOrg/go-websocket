@@ -57,9 +57,9 @@ const (
 
 var (
 	UpgradeTimeout = 5 * time.Second
-	PongWait       = 60 * time.Second
-	WriteWait      = 10 * time.Second
-	PingPeriod     = (PongWait * 9) / 10
+	//PongWait       = 60 * time.Second
+	//WriteWait      = 10 * time.Second
+	//PingPeriod     = (PongWait * 9) / 10
 )
 
 func SetConn(ctx *dgctx.DgContext, conn *websocket.Conn) {
@@ -229,26 +229,26 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			return
 		}
 
-		var pongWait time.Duration
-		if conf.PongWait > 0 {
-			pongWait = conf.PongWait
-		} else {
-			pongWait = PongWait
-		}
-
-		var writeWait time.Duration
-		if conf.WriteWait > 0 {
-			writeWait = conf.WriteWait
-		} else {
-			writeWait = WriteWait
-		}
-
-		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-		_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
-		conn.SetPongHandler(func(appData string) error {
-			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-			return nil
-		})
+		//var pongWait time.Duration
+		//if conf.PongWait > 0 {
+		//	pongWait = conf.PongWait
+		//} else {
+		//	pongWait = PongWait
+		//}
+		//
+		//var writeWait time.Duration
+		//if conf.WriteWait > 0 {
+		//	writeWait = conf.WriteWait
+		//} else {
+		//	writeWait = WriteWait
+		//}
+		//
+		//_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+		//_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+		//conn.SetPongHandler(func(appData string) error {
+		//	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+		//	return nil
+		//})
 
 		SetConn(ctx, conn)
 
@@ -270,10 +270,10 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			conf.IsEndedHandler = DefaultIsEndHandler
 		}
 
-		if conf.PingPeriod > 0 {
-			// 启动心跳机制
-			startPing(ctx, conn, conf.PingPeriod, writeWait)
-		}
+		//if conf.PingPeriod > 0 {
+		//	// 启动心跳机制
+		//	startPing(ctx, conn, conf.PingPeriod, writeWait)
+		//}
 
 		for {
 			if IsWsEnded(ctx) {
@@ -313,7 +313,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			}
 
 			if mt == websocket.PongMessage {
-				_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+				//_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 				continue
 			}
 
