@@ -22,7 +22,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rolandhe/saber/gocc"
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -45,7 +44,6 @@ type (
 		IsEndedHandler     IsEndedHandler
 		EndCallbackHandler EndCallbackHandler
 
-		EnableTracer        bool
 		EnableMessageTracer bool
 
 		UpgradeTimeout time.Duration
@@ -217,17 +215,13 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		}
 
 		var span trace.Span
-		if conf.EnableTracer && dgotel.Tracer != nil {
+		if dgotel.Tracer != nil {
 			if s := trace.SpanFromContext(c.Request.Context()); s.SpanContext().IsValid() {
 				span = s
 				attrs := dghttp.ExtractOtelAttributesFromRequest(c.Request)
 				if len(attrs) > 0 {
 					span.SetAttributes(attrs...)
 				}
-
-				defer func() {
-					span.SetAttributes(semconv.HTTPResponseContentLength(c.Writer.Size()))
-				}()
 			}
 		}
 
