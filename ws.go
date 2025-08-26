@@ -45,6 +45,9 @@ type (
 		IsEndedHandler     IsEndedHandler
 		EndCallbackHandler EndCallbackHandler
 
+		EnableTracer        bool
+		EnableMessageTracer bool
+
 		UpgradeTimeout time.Duration
 		PongWait       time.Duration
 		WriteWait      time.Duration
@@ -214,7 +217,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		}
 
 		var span trace.Span
-		if dgotel.Tracer != nil {
+		if conf.EnableTracer && dgotel.Tracer != nil {
 			if s := trace.SpanFromContext(c.Request.Context()); s.SpanContext().IsValid() {
 				span = s
 				attrs := dghttp.ExtractOtelAttributesFromRequest(c.Request)
@@ -247,6 +250,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		if err != nil {
 			dglogger.Errorw(ctx, "websocket upgrade failed", "err", err, bizKey, bizId)
 			c.AbortWithStatusJSON(http.StatusBadRequest, result.SimpleFail[string]("websocket upgrade failed"))
+			dgotel.RecordError(span, err)
 			return
 		}
 
@@ -275,6 +279,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		if err != nil {
 			dglogger.Errorw(ctx, "start websocket error", "err", err, bizKey, bizId)
 			handleWsError(conn, err)
+			dgotel.RecordError(span, err)
 			return
 		}
 
@@ -298,7 +303,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			mt, message, err := conn.ReadMessage()
 
 			var subSpan trace.Span
-			if span != nil {
+			if conf.EnableMessageTracer && span != nil {
 				_, subSpan = dgotel.Tracer.Start(c.Request.Context(), "websocket")
 				subSpan.SetAttributes(
 					attribute.String("ws.receive.type", getMessageTypeString(mt)),
