@@ -1,6 +1,7 @@
 package dgws_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -10,11 +11,12 @@ import (
 	dgctx "github.com/darwinOrg/go-common/context"
 	dglogger "github.com/darwinOrg/go-logger"
 	"github.com/darwinOrg/go-monitor"
+	dgotel "github.com/darwinOrg/go-otel"
 	"github.com/darwinOrg/go-web/wrapper"
 	dgws "github.com/darwinOrg/go-websocket"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 )
 
 type testData struct {
@@ -39,6 +41,9 @@ var datas = []testData{
 func TestSendOwn(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	monitor.Start("test", 19002)
+	cleanup := initTracer()
+	defer cleanup()
+
 	engine := wrapper.DefaultEngine()
 	path := "/public/v1/ws/test"
 	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage, error]{
@@ -62,22 +67,41 @@ func TestSendOwn(t *testing.T) {
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)
 
-	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:8080", path, datas, 5)
+	ctx := dgctx.SimpleDgContext()
+	sendMessage(ctx, "localhost:8080", path, datas, 3)
+	time.Sleep(time.Second * 5)
 }
 
 func TestSendLocal(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	path := "/public/v1/ws/test"
-	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "localhost:8080", path, datas, 5)
+	ctx := dgctx.SimpleDgContext()
+	sendMessage(ctx, "localhost:8080", path, datas, 3)
 }
 
 func TestSendProd(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	path := "/ground/public/v1/ws/test"
-	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
-	sendMessage(ctx, "e.globalpand.cn", path, datas, 5)
+	ctx := dgctx.SimpleDgContext()
+	sendMessage(ctx, "e.xjob.co", path, datas, 3)
+}
+
+func initTracer() func() {
+	exporter, err := otlptracehttp.New(
+		context.Background(),
+		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithInsecure(),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	cleanup, err := dgotel.InitTracer("test-service", exporter)
+	if err != nil {
+		panic(err)
+	}
+
+	return cleanup
 }
 
 func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []testData, intervalSeconds time.Duration) {
