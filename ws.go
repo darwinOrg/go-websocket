@@ -299,7 +299,7 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 
 			var subSpan trace.Span
 			if span != nil {
-				_, subSpan = dgotel.Tracer.Start(c.Request.Context(), "ws.receive")
+				_, subSpan = dgotel.Tracer.Start(c.Request.Context(), "websocket")
 				subSpan.SetAttributes(
 					attribute.String("ws.receive.type", getMessageTypeString(mt)),
 					attribute.Int("ws.receive.size", len(message)),
