@@ -50,6 +50,7 @@ func TestSendOwn(t *testing.T) {
 		RouterGroup:  engine.Group(""),
 		RelativePath: path,
 		NonLogin:     true,
+		EnableTracer: true,
 		BizHandler: func(_ *gin.Context, ctx *dgctx.DgContext, wsm *dgws.WebSocketMessage) error {
 			dglogger.Infof(ctx, "handle message: %s", string(wsm.MessageData))
 			return nil
@@ -59,10 +60,11 @@ func TestSendOwn(t *testing.T) {
 		GetBizIdHandler: func(c *gin.Context) string {
 			return c.Query("bizId")
 		},
-		StartHandler:       nil,
-		IsEndedHandler:     dgws.DefaultIsEndHandler,
-		EndCallbackHandler: nil,
-		PingPeriod:         time.Second * 3,
+		StartHandler:        nil,
+		IsEndedHandler:      dgws.DefaultIsEndHandler,
+		EndCallbackHandler:  nil,
+		EnableMessageTracer: true,
+		PingPeriod:          time.Second * 3,
 	})
 	go engine.Run(fmt.Sprintf(":%d", 8080))
 	time.Sleep(time.Second * 3)

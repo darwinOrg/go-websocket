@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	dgcoll "github.com/darwinOrg/go-common/collection"
 	dgctx "github.com/darwinOrg/go-common/context"
 	dgerr "github.com/darwinOrg/go-common/enums/error"
 	"github.com/darwinOrg/go-common/result"
@@ -38,18 +37,16 @@ type (
 	}
 
 	WebSocketHandlerConfig struct {
-		BizKey             string
-		GetBizIdHandler    GetBizIdHandler
-		StartHandler       StartHandler
-		IsEndedHandler     IsEndedHandler
-		EndCallbackHandler EndCallbackHandler
-
+		BizKey              string
+		GetBizIdHandler     GetBizIdHandler
+		StartHandler        StartHandler
+		IsEndedHandler      IsEndedHandler
+		EndCallbackHandler  EndCallbackHandler
 		EnableMessageTracer bool
-
-		UpgradeTimeout time.Duration
-		PongWait       time.Duration
-		WriteWait      time.Duration
-		PingPeriod     time.Duration
+		UpgradeTimeout      time.Duration
+		PongWait            time.Duration
+		WriteWait           time.Duration
+		PingPeriod          time.Duration
 	}
 )
 
@@ -358,11 +355,16 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		}
 	}
 
-	handlersChain := gin.HandlersChain{wrapper.LoginHandler(rh), wrapper.CheckProductHandler(rh), wrapper.CheckRolesHandler(rh), wrapper.CheckProfileHandler(), bizHandler}
-	if len(rh.PreHandlersChain) > 0 {
-		handlersChain = dgcoll.MergeToList(rh.PreHandlersChain, handlersChain)
+	var handlersChain []gin.HandlerFunc
+	if rh.EnableTracer && dgotel.Tracer != nil && wrapper.TracerMiddleware != nil {
+		handlersChain = append(handlersChain, wrapper.TracerMiddleware)
 	}
 
+	if len(rh.PreHandlersChain) > 0 {
+		handlersChain = append(handlersChain, rh.PreHandlersChain...)
+	}
+
+	handlersChain = append(handlersChain, wrapper.LoginHandler(rh), wrapper.CheckProductHandler(rh), wrapper.CheckRolesHandler(rh), wrapper.CheckProfileHandler(), bizHandler)
 	rh.GET(rh.RelativePath, handlersChain...)
 }
 
