@@ -16,7 +16,6 @@ import (
 	dgws "github.com/darwinOrg/go-websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 )
 
 type testData struct {
@@ -89,21 +88,9 @@ func TestSendProd(t *testing.T) {
 }
 
 func initTracer() func() {
-	exporter, err := otlptracehttp.New(
-		context.Background(),
-		otlptracehttp.WithEndpoint("localhost:4318"),
-		otlptracehttp.WithInsecure(),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	cleanup, err := dgotel.InitTracer("test-service", exporter)
-	if err != nil {
-		panic(err)
-	}
-
-	return cleanup
+	ctx := context.Background()
+	exporter := dgotel.NewHTTPExporter(ctx, "localhost:4318", "")
+	return dgotel.InitTracer(ctx, "test-service", exporter)
 }
 
 func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []testData, intervalSeconds time.Duration) {

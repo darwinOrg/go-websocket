@@ -4,16 +4,15 @@ go 1.23.1
 
 require (
 	github.com/darwinOrg/go-common v0.2.9
-	github.com/darwinOrg/go-httpclient v0.1.53
+	github.com/darwinOrg/go-httpclient v0.1.54
 	github.com/darwinOrg/go-logger v0.0.14
 	github.com/darwinOrg/go-monitor v0.0.9
-	github.com/darwinOrg/go-otel v0.0.10
-	github.com/darwinOrg/go-web v0.1.84
+	github.com/darwinOrg/go-otel v0.0.12
+	github.com/darwinOrg/go-web v0.1.85
 	github.com/gin-gonic/gin v1.10.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/rolandhe/saber v0.0.5
 	go.opentelemetry.io/otel v1.37.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 )
 
@@ -56,6 +55,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.62.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.62.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.37.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.37.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
