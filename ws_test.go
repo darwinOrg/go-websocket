@@ -1,7 +1,6 @@
 package dgws_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -11,7 +10,6 @@ import (
 	dgctx "github.com/darwinOrg/go-common/context"
 	dglogger "github.com/darwinOrg/go-logger"
 	"github.com/darwinOrg/go-monitor"
-	dgotel "github.com/darwinOrg/go-otel"
 	"github.com/darwinOrg/go-web/wrapper"
 	dgws "github.com/darwinOrg/go-websocket"
 	"github.com/gin-gonic/gin"
@@ -40,9 +38,6 @@ var datas = []testData{
 func TestSendOwn(t *testing.T) {
 	dgws.InitWsConnLimit(10)
 	monitor.Start("test", 19002)
-	cleanup := initTracer()
-	defer cleanup()
-
 	engine := wrapper.DefaultEngine()
 	path := "/public/v1/ws/test"
 	dgws.Get(&wrapper.RequestHolder[dgws.WebSocketMessage, error]{
@@ -85,12 +80,6 @@ func TestSendProd(t *testing.T) {
 	path := "/ground/public/v1/ws/test"
 	ctx := dgctx.SimpleDgContext()
 	sendMessage(ctx, "e.xjob.co", path, datas, 3)
-}
-
-func initTracer() func() {
-	ctx := context.Background()
-	exporter := dgotel.NewHTTPExporter(ctx, "localhost:4318", "")
-	return dgotel.InitTracer(ctx, "test-service", exporter)
 }
 
 func sendMessage(ctx *dgctx.DgContext, host string, path string, datas []testData, intervalSeconds time.Duration) {

@@ -5,23 +5,18 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
 	dgctx "github.com/darwinOrg/go-common/context"
 	dgerr "github.com/darwinOrg/go-common/enums/error"
 	"github.com/darwinOrg/go-common/result"
-	dghttp "github.com/darwinOrg/go-httpclient"
 	dglogger "github.com/darwinOrg/go-logger"
-	dgotel "github.com/darwinOrg/go-otel"
 	"github.com/darwinOrg/go-web/utils"
 	"github.com/darwinOrg/go-web/wrapper"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rolandhe/saber/gocc"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type (
@@ -211,17 +206,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			defer semaphore.Release()
 		}
 
-		var span trace.Span
-		if dgotel.Tracer != nil {
-			if s := trace.SpanFromContext(c.Request.Context()); s.SpanContext().IsValid() {
-				span = s
-				attrs := dghttp.ExtractOtelAttributesFromRequest(c.Request)
-				if len(attrs) > 0 {
-					span.SetAttributes(attrs...)
-				}
-			}
-		}
-
 		bizKey := conf.BizKey
 		var bizId string
 		if bizKey != "" && conf.GetBizIdHandler != nil {
@@ -241,7 +225,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		if err != nil {
 			dglogger.Errorw(ctx, "websocket upgrade failed", "err", err, bizKey, bizId)
 			c.AbortWithStatusJSON(http.StatusBadRequest, result.SimpleFail[string]("websocket upgrade failed"))
-			dgotel.RecordError(span, err)
 			return
 		}
 
@@ -270,7 +253,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 		if err != nil {
 			dglogger.Errorw(ctx, "start websocket error", "err", err, bizKey, bizId)
 			handleWsError(conn, err)
-			dgotel.RecordError(span, err)
 			return
 		}
 
@@ -293,15 +275,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 
 			mt, message, err := conn.ReadMessage()
 
-			var subSpan trace.Span
-			if conf.EnableMessageTracer && span != nil {
-				_, subSpan = dgotel.Tracer.Start(c.Request.Context(), "websocket")
-				subSpan.SetAttributes(
-					attribute.String("ws.receive.type", getMessageTypeString(mt)),
-					attribute.Int("ws.receive.size", len(message)),
-				)
-			}
-
 			if err != nil {
 				var ne net.Error
 				switch {
@@ -312,7 +285,6 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 					dglogger.Errorw(ctx, "server read error", "err", err, bizKey, bizId)
 					SetWsEnded(ctx)
 				}
-				dgotel.RecordErrorAndEndSpan(subSpan, err)
 				break
 			}
 
@@ -323,23 +295,19 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 					err := conf.EndCallbackHandler(ctx, conn)
 					if err != nil {
 						dglogger.Errorw(ctx, "end callback error", "err", err, bizKey, bizId)
-						dgotel.RecordError(subSpan, err)
 					}
 				}
 				_ = conn.WriteMessage(websocket.CloseMessage, message)
-				dgotel.EndSpan(subSpan)
 				break
 			}
 
 			if err != nil {
 				dglogger.Errorw(ctx, "server read error", "err", err, bizKey, bizId)
-				dgotel.RecordError(subSpan, err)
 				break
 			}
 
 			if mt == websocket.PongMessage {
 				//_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-				dgotel.EndSpan(subSpan)
 				continue
 			}
 
@@ -347,19 +315,12 @@ func Get(rh *wrapper.RequestHolder[WebSocketMessage, error], conf *WebSocketHand
 			err = rh.BizHandler(c, ctx, wsm)
 			if err != nil {
 				dglogger.Errorw(ctx, "biz handle message error", "err", err, bizKey, bizId)
-				dgotel.RecordError(subSpan, err)
 				continue
 			}
-
-			dgotel.EndSpan(subSpan)
 		}
 	}
 
 	var handlersChain []gin.HandlerFunc
-	if rh.EnableTracer && dgotel.Tracer != nil && wrapper.TracerMiddleware != nil {
-		handlersChain = append(handlersChain, wrapper.TracerMiddleware)
-	}
-
 	if len(rh.PreHandlersChain) > 0 {
 		handlersChain = append(handlersChain, rh.PreHandlersChain...)
 	}
@@ -427,21 +388,4 @@ func WriteDgErrorResult(conn *websocket.Conn, err *dgerr.DgError) {
 	rt := result.FailByError[*dgerr.DgError](err)
 	rtBytes, _ := json.Marshal(rt)
 	_ = conn.WriteMessage(websocket.TextMessage, rtBytes)
-}
-
-func getMessageTypeString(mt int) string {
-	switch mt {
-	case websocket.TextMessage:
-		return "text"
-	case websocket.BinaryMessage:
-		return "binary"
-	case websocket.CloseMessage:
-		return "close"
-	case websocket.PingMessage:
-		return "ping"
-	case websocket.PongMessage:
-		return "pong"
-	default:
-		return strconv.Itoa(mt)
-	}
 }
